@@ -35,3 +35,51 @@ async def test_tcp_flow():
     assert result2["data"][CONF_HOST] == "1.2.3.4"
     assert result2["data"][CONF_PORT] == 502
     assert result2["data"][CONF_UNIT] == 17
+
+    # invalid port should return form with error
+    result3 = await flow.async_step_user({CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1})
+    assert result3["type"] == "form"
+    assert result3["errors"][CONF_PORT] == "invalid_port"
+
+    # invalid unit should return form with error
+    result4 = await flow.async_step_user({CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0})
+    assert result4["type"] == "form"
+    assert result4["errors"][CONF_UNIT] == "invalid_unit"
+
+
+# additional helper test for setup_entry device registration
+
+class DummyRegistry:
+    def __init__(self):
+        self.created = []
+    def async_get_or_create(self, **kwargs):
+        self.created.append(kwargs)
+        return kwargs
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_creates_device(monkeypatch):
+    """The entry setup should register a device in the device registry."""
+    from custom_components.plum_ecovent import async_setup_entry
+    from homeassistant.helpers import device_registry as dr
+    from types import SimpleNamespace
+    from custom_components.plum_ecovent.const import DOMAIN
+
+    async def fake_forward(entry, p):
+        return []
+
+    hass = SimpleNamespace(
+        data={},
+        config_entries=SimpleNamespace(async_forward_entry_setups=fake_forward),
+    )
+    registry = DummyRegistry()
+    async def fake_async_get(hass_obj):
+        return registry
+    monkeypatch.setattr(dr, "async_get", fake_async_get)
+
+    entry = SimpleNamespace(entry_id="abc123", title="MyUnit", data={})
+    result = await async_setup_entry(hass, entry)
+    assert result is True
+    # ensure our dummy registry was used and received identifiers
+    assert registry.created, "device registry not invoked"
+    assert registry.created[0]["identifiers"] == {(DOMAIN, entry.entry_id)}

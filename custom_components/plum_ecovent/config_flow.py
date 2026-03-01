@@ -32,21 +32,33 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Initial step — ask for TCP parameters."""
         if user_input is None:
-            schema = vol.Schema(
+            # simple integer inputs; avoid sliders by not using vol.Range
+            self._schema = vol.Schema(
                 {
                     vol.Required(CONF_HOST, default="127.0.0.1"): str,
-                    vol.Required(CONF_PORT, default=502): int,
-                    vol.Required(CONF_UNIT, default=1): vol.All(int, vol.Range(min=1, max=255)),
+                    vol.Required(CONF_PORT, default=502): vol.All(vol.Coerce(int)),
+                    vol.Required(CONF_UNIT, default=1): vol.All(vol.Coerce(int)),
                     vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
                 }
             )
-            return self.async_show_form(step_id="user", data_schema=schema)
+            return self.async_show_form(step_id="user", data_schema=self._schema)
 
         self._data.update(user_input)
 
+        # ensure integer fields are in valid ranges; report errors if not
+        errors: dict[str, str] = {}
+        port = self._data.get(CONF_PORT)
+        if port is None or not (1 <= port <= 65535):
+            errors[CONF_PORT] = "invalid_port"
+        unit = self._data.get(CONF_UNIT)
+        if unit is None or not (1 <= unit <= 255):
+            errors[CONF_UNIT] = "invalid_unit"
+        if errors:
+            # re-display the same schema we stored earlier
+            return self.async_show_form(step_id="user", data_schema=self._schema, errors=errors)
+
         # unique id based on host/port
         host = self._data.get(CONF_HOST)
-        port = self._data.get(CONF_PORT)
         if host and port is not None:
             await self.async_set_unique_id(f"{host}:{port}")
             self._abort_if_unique_id_configured()
