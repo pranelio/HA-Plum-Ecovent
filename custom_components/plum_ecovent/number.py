@@ -9,6 +9,7 @@ try:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
+    from homeassistant.const import EntityCategory
 except Exception:  # Running outside Home Assistant for tests
     class NumberEntity:  # type: ignore
         pass
@@ -65,7 +66,10 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         if definition.device_class:
             self._attr_device_class = definition.device_class
         if definition.entity_category:
-            self._attr_entity_category = definition.entity_category
+            try:
+                self._attr_entity_category = EntityCategory(definition.entity_category)
+            except Exception:
+                self._attr_entity_category = None
         if definition.step is not None:
             self._attr_native_step = definition.step
         if definition.min_value is not None:

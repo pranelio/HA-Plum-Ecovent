@@ -5,6 +5,7 @@ Provides a small wrapper around a pymodbus async TCP client.
 from __future__ import annotations
 
 import logging
+import inspect
 from typing import Any
 
 try:
@@ -107,7 +108,9 @@ class ModbusClientManager:
         close = getattr(self._client, "close", None)
         if close is not None:
             try:
-                result = await close()
+                result = close()
+                if inspect.isawaitable(result):
+                    result = await result
                 _LOGGER.debug("Modbus close result: %s", result)
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Error closing Modbus client")
@@ -125,17 +128,28 @@ class ModbusClientManager:
             # positional argument or ignore it entirely.  try a sequence of
             # combinations until one works.
             try:
-                result = await self._client.read_holding_registers(
-                    address, count, unit=use_unit
+                result = self._client.read_holding_registers(
+                    address=address, count=count, unit=use_unit
                 )
+                if inspect.isawaitable(result):
+                    result = await result
             except TypeError:
                 try:
-                    result = await self._client.read_holding_registers(
+                    result = self._client.read_holding_registers(
                         address, count, use_unit
                     )
+                    if inspect.isawaitable(result):
+                        result = await result
                 except TypeError:
-                    # maybe the method doesn't accept a unit at all
-                    result = await self._client.read_holding_registers(address, count)
+                    try:
+                        result = self._client.read_holding_registers(address=address, count=count)
+                        if inspect.isawaitable(result):
+                            result = await result
+                    except TypeError:
+                        # last resort: address only
+                        result = self._client.read_holding_registers(address)
+                        if inspect.isawaitable(result):
+                            result = await result
 
             # some pymodbus results expose isError()
             if result is not None and hasattr(result, "isError") and callable(result.isError):
@@ -157,12 +171,23 @@ class ModbusClientManager:
         try:
             use_unit = self.unit if unit is None else unit
             try:
-                result = await self._client.write_register(address, value, unit=use_unit)
+                result = self._client.write_register(address=address, value=value, unit=use_unit)
+                if inspect.isawaitable(result):
+                    result = await result
             except TypeError:
                 try:
-                    result = await self._client.write_register(address, value, use_unit)
+                    result = self._client.write_register(address, value, use_unit)
+                    if inspect.isawaitable(result):
+                        result = await result
                 except TypeError:
-                    result = await self._client.write_register(address, value)
+                    try:
+                        result = self._client.write_register(address=address, value=value)
+                        if inspect.isawaitable(result):
+                            result = await result
+                    except TypeError:
+                        result = self._client.write_register(address, value)
+                        if inspect.isawaitable(result):
+                            result = await result
 
             if result is not None and hasattr(result, "isError") and callable(result.isError):
                 if result.isError():

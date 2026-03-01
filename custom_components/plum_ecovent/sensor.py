@@ -9,6 +9,7 @@ try:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
+    from homeassistant.const import EntityCategory
 except Exception:  # Running outside Home Assistant for tests
     class SensorEntity:  # type: ignore
         pass
@@ -66,7 +67,10 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         if definition.accuracy_decimals is not None:
             self._attr_state_class = SensorStateClass.MEASUREMENT
         if definition.entity_category:
-            self._attr_entity_category = definition.entity_category
+            try:
+                self._attr_entity_category = EntityCategory(definition.entity_category)
+            except Exception:
+                self._attr_entity_category = None
 
     @property
     def device_info(self):

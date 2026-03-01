@@ -9,6 +9,7 @@ try:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
+    from homeassistant.const import EntityCategory
 except Exception:  # Running outside Home Assistant for tests
     class SwitchEntity:  # type: ignore
         pass
@@ -61,7 +62,10 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{entry.entry_id}_switch_{definition.address}_{definition.name}"
         self._attr_is_on = False
         if definition.entity_category is not None:
-            self._attr_entity_category = definition.entity_category
+            try:
+                self._attr_entity_category = EntityCategory(definition.entity_category)
+            except Exception:
+                self._attr_entity_category = None
 
     @property
     def device_info(self):
