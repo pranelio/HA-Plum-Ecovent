@@ -30,7 +30,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     _LOGGER.info("Setting up Plum Ecovent entry: %s", entry.title)
 
-    manager = ModbusClientManager(hass, entry.data)
+    config = {**entry.data, **entry.options}
+    manager = ModbusClientManager(hass, config)
     connected = await manager.async_connect()
     if not connected:
         _LOGGER.error("Failed to connect Modbus for entry %s", entry.entry_id)
@@ -38,7 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from . import registers
 
-    update_rate = int(entry.data.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE))
+    update_rate = int(config.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE))
     coordinator = PlumEcoventCoordinator(
         hass,
         manager,
@@ -62,6 +63,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "manager": manager,
         "coordinator": coordinator,
     }
+
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     # ensure a device entry exists so all entities are grouped
     try:
@@ -97,3 +100,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await manager.async_close()
 
     return unload_ok
+
+
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)

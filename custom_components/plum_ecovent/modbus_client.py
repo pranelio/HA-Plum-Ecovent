@@ -42,6 +42,9 @@ class ModbusClientManager:
         # unit id (slave address)
         from .const import DEFAULT_UNIT, CONF_UNIT
         self.unit = int(self.config.get(CONF_UNIT, DEFAULT_UNIT))
+        self.retries = 2
+        self.backoff = 0.2
+        self.timeout = 5.0
 
     async def async_connect(self) -> bool:
         """Create and connect the underlying pymodbus async client."""
@@ -132,27 +135,36 @@ class ModbusClientManager:
             # some pymodbus versions expect `unit` keyword, others take it as
             # positional argument or ignore it entirely.  try a sequence of
             # combinations until one works.
-            for call in (
-                lambda: self._client.read_holding_registers(address, count),
-                lambda: self._client.read_holding_registers(address=address, count=count),
-                lambda: self._client.read_holding_registers(address, count, use_unit),
-                lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
-                lambda: self._client.read_holding_registers(address),
-            ):
-                try:
-                    result = call()
-                    if inspect.isawaitable(result):
-                        try:
-                            result = await result
-                        except asyncio.CancelledError:
-                            _LOGGER.debug("Modbus read cancelled (likely due to unload)")
-                            return None
+            result = None
+            for attempt in range(self.retries + 1):
+                for call in (
+                    lambda: self._client.read_holding_registers(address, count),
+                    lambda: self._client.read_holding_registers(address=address, count=count),
+                    lambda: self._client.read_holding_registers(address, count, use_unit),
+                    lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
+                    lambda: self._client.read_holding_registers(address),
+                ):
+                    try:
+                        result = call()
+                        if inspect.isawaitable(result):
+                            try:
+                                result = await asyncio.wait_for(result, timeout=self.timeout)
+                            except asyncio.CancelledError:
+                                _LOGGER.debug("Modbus read cancelled (likely due to unload)")
+                                return None
+                        break
+                    except TypeError:
+                        result = None
+                        continue
+                    except (ConnectionException, asyncio.TimeoutError):
+                        result = None
+                        break
+                if result is not None:
                     break
-                except TypeError:
-                    result = None
-                    continue
-                except ConnectionException:
-                    _LOGGER.warning("Modbus client not connected; read skipped")
+                if attempt < self.retries:
+                    await asyncio.sleep(self.backoff * (attempt + 1))
+                else:
+                    _LOGGER.warning("Modbus read failed after retries for address %s", address)
                     return None
 
             # some pymodbus results expose isError()
@@ -177,26 +189,35 @@ class ModbusClientManager:
             return False
         try:
             use_unit = self.unit if unit is None else unit
-            for call in (
-                lambda: self._client.write_register(address, value),
-                lambda: self._client.write_register(address=address, value=value),
-                lambda: self._client.write_register(address, value, use_unit),
-                lambda: self._client.write_register(address=address, value=value, unit=use_unit),
-            ):
-                try:
-                    result = call()
-                    if inspect.isawaitable(result):
-                        try:
-                            result = await result
-                        except asyncio.CancelledError:
-                            _LOGGER.debug("Modbus write cancelled (likely due to unload)")
-                            return False
+            result = None
+            for attempt in range(self.retries + 1):
+                for call in (
+                    lambda: self._client.write_register(address, value),
+                    lambda: self._client.write_register(address=address, value=value),
+                    lambda: self._client.write_register(address, value, use_unit),
+                    lambda: self._client.write_register(address=address, value=value, unit=use_unit),
+                ):
+                    try:
+                        result = call()
+                        if inspect.isawaitable(result):
+                            try:
+                                result = await asyncio.wait_for(result, timeout=self.timeout)
+                            except asyncio.CancelledError:
+                                _LOGGER.debug("Modbus write cancelled (likely due to unload)")
+                                return False
+                        break
+                    except TypeError:
+                        result = None
+                        continue
+                    except (ConnectionException, asyncio.TimeoutError):
+                        result = None
+                        break
+                if result is not None:
                     break
-                except TypeError:
-                    result = None
-                    continue
-                except ConnectionException:
-                    _LOGGER.warning("Modbus client not connected; write skipped")
+                if attempt < self.retries:
+                    await asyncio.sleep(self.backoff * (attempt + 1))
+                else:
+                    _LOGGER.warning("Modbus write failed after retries for address %s", address)
                     return False
 
             if result is not None and hasattr(result, "isError") and callable(result.isError):
