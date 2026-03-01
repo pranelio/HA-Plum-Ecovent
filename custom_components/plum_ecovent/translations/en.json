@@ -1,0 +1,17 @@
+{
+  "title": "Plum Ecovent",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Plum Ecovent setup",
+        "description": "Choose which Modbus interface to use (TCP or RTU)."
+      },
+      "modbus_tcp": {
+        "title": "Modbus TCP settings"
+      },
+      "modbus_rtu": {
+        "title": "Modbus RTU settings"
+      }
+    }
+  }
+}
