@@ -1,5 +1,7 @@
 import asyncio
-from custom_components.plum_ecovent.const import REG_SWITCH, REG_NUMBER
+import sys, os
+# ensure custom_components package is importable
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 class DummyResult:
     def __init__(self, regs):
@@ -37,7 +39,15 @@ def test_sensor_async_update():
 
     manager = DummyManager()
     entry = SimpleNamespace(title="Test", entry_id="1", data={})
-    sensor = PlumEcoventSensor(manager, entry)
+    # construct with a dummy definition matching old behaviour
+    class Def:
+        address = 0
+        name = "Register 0"
+        device_class = None
+        unit_of_measurement = None
+        accuracy_decimals = None
+        entity_category = None
+    sensor = PlumEcoventSensor(manager, entry, Def())
 
     loop = asyncio.new_event_loop()
     try:
@@ -66,8 +76,12 @@ def test_other_entities():
     import importlib.util, sys, types
 
     def load_module(path, name):
-        spec = importlib.util.spec_from_file_location(name, path)
+        # load module under the proper package name so relative imports work
+        qualname = f"custom_components.plum_ecovent.{name}"
+        spec = importlib.util.spec_from_file_location(qualname, path)
         mod = importlib.util.module_from_spec(spec)
+        # ensure package context is set
+        mod.__package__ = "custom_components.plum_ecovent"
         pkg = types.ModuleType('custom_components')
         pkg.__path__ = ['custom_components']
         sys.modules['custom_components'] = pkg
@@ -95,9 +109,15 @@ def test_other_entities():
     manager = DummyManager2()
     entry = SimpleNamespace(title="Test", entry_id="1", data={})
 
-    bina = binary_mod.PlumEcoventBinarySensor(manager, entry)
-    sw = switch_mod.PlumEcoventSwitch(manager, entry)
-    num = number_mod.PlumEcoventNumber(manager, entry)
+    # pick one definition from registers for each platform
+    from custom_components.plum_ecovent.registers import (
+        BINARY_SENSORS,
+        SWITCHES,
+        NUMBERS,
+    )
+    bina = binary_mod.PlumEcoventBinarySensor(manager, entry, BINARY_SENSORS[0])
+    sw = switch_mod.PlumEcoventSwitch(manager, entry, SWITCHES[0])
+    num = number_mod.PlumEcoventNumber(manager, entry, NUMBERS[0])
 
     loop = asyncio.new_event_loop()
     try:
@@ -109,13 +129,13 @@ def test_other_entities():
         assert sw.is_on in (False, True)
 
         loop.run_until_complete(sw.async_turn_on())
-        assert manager.written[-1] == (REG_SWITCH, 1)
+        assert manager.written[-1] == (sw._definition.address, 1)
         loop.run_until_complete(sw.async_turn_off())
-        assert manager.written[-1] == (REG_SWITCH, 0)
+        assert manager.written[-1] == (sw._definition.address, 0)
 
         loop.run_until_complete(num.async_update())
         assert isinstance(num.native_value, (int, float))
         loop.run_until_complete(num.async_set_native_value(5))
-        assert manager.written[-1] == (REG_NUMBER, 5)
+        assert manager.written[-1] == (num._definition.address, 5)
     finally:
         loop.close()

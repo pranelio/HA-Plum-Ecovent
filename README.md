@@ -1,55 +1,72 @@
 # Plum Ecovent
 
-Home Assistant integration for Plum Ecovent ventilation units using Modbus TCP.
+A custom Home Assistant integration that communicates with Plum Ecovent
+ventilation units over **Modbus TCP**.  It exposes controller registers as
+standard Home Assistant entities, allowing you to monitor temperatures,
+fan speeds, filter status and to change configuration parameters directly
+from the UI or automations.
 
-Installation
-- Copy the `plum_ecovent` folder into your `custom_components` folder, so the path becomes `custom_components/plum_ecovent`.
-- Restart Home Assistant.
-
-Configuration
-- Configure using the UI via Integrations → Add Integration → Plum Ecovent.
-- Provide the TCP host and port and the Modbus unit address.
-
-Platforms
-
-The integration creates a **device** that represents your Ecovent controller.
-Four platforms are available by default, each reading or writing a dedicated
-Modbus register.  You can tweak the addresses in `const.py` if necessary.
-
-* **Sensor** – read a numeric register value
-* **Binary sensor** – read a boolean register
-* **Switch** – toggle a register between `0`/`1`
-* **Number** – treat a register as a writable numeric value
+> ✅ **Purpose:** control and observe a Plum Ecovent system via its built-in
+> Modbus interface. Ideal when native support is missing from Home Assistant
+> or when you want full access to the unit's registers.
 
 
-Developer notes
-- This integration uses `pymodbus` for Modbus communication. The dependency is declared in `manifest.json`.
-- The integration provides a small `ModbusClientManager` wrapper in `modbus_client.py` to manage connections.
+## Installation
+1. Clone or download this repository.
+2. Copy the `plum_ecovent` directory into your Home Assistant
+   `custom_components` folder (e.g. `/config/custom_components/plum_ecovent`).
+3. Restart Home Assistant.
+4. Navigate to **Settings → Devices & Services → Add Integration** and search
+   for *Plum Ecovent*.
+5. Provide the IP address and port of the Modbus TCP server on your Ecovent
+   device, and the Modbus unit ID (usually `1`).
 
-Blueprint alignment
-- Scaffolding follows the ludeeus `integration_blueprint` layout: `manifest.json`, `config_flow.py`, translations, and `hacs.json`.
+HACS users can install directly from a release or the repository URL; the
+`hacs.json` metadata ensures the integration appears correctly.
 
-Contributing
-- See the repository README for contribution guidelines.
 
-Running tests
+## Usage
+The integration registers a single device representing the controller.  Four
+platforms are supported by default (sensor, binary_sensor, switch, number),
+and each entity corresponds to a specific Modbus register.  Entities are
+created automatically from the definitions in
+`custom_components/plum_ecovent/registers.py`.
 
-This project uses `pytest` with the Home Assistant custom component
-helper.  To install the required packages and run the test suite, create a
-Python virtual environment and install the development requirements:
+You can customise which registers are read or written by editing that file,
+or override values via the UI once the integration is set up.
 
+Typical entities include:
+
+* **Temperature sensors** (CO2, supply/exhaust, outdoor, etc.)
+* **Binary diagnostics** such as filter replacement needed or heater status
+* **Switches** for modes like `Auto` or `Boost`
+* **Numbers** for fan speed settings, temperature setpoints, etc.
+
+Use Home Assistant automations to trigger actions based on sensor values or
+to adjust configuration periodically.
+
+
+## Development
+- Written in Python using the Home Assistant developer framework.
+- Modbus handled by [`pymodbus`](https://pymodbus.readthedocs.io/).
+
+If you want to modify or extend the integration, follow the instructions in
+`tests` to set up a development environment and run the unit tests.
+
+### Running tests
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements-dev.txt
-```
-
-Then execute the tests with:
-
-```powershell
 pytest -q
 ```
 
-The `pytest.ini` file configures the test discovery and ensures the
-`custom_components` directory is on `PYTHONPATH` so your modules can be
-imported directly.
+
+## Contributing
+Contributions are welcome!  Please open an issue or pull request on GitHub
+and include a description of the change and any testing performed.
+
+---
+
+*(This README is intended for users of the integration; developer-focused
+notes have been moved to the repository itself.)*

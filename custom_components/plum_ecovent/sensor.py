@@ -28,17 +28,31 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     manager: ModbusClientManager = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PlumEcoventSensor(manager, entry)], True)
+    from .registers import SENSORS
+
+    entities = [PlumEcoventSensor(manager, entry, d) for d in SENSORS]
+    async_add_entities(entities, True)
 
 
 class PlumEcoventSensor(SensorEntity):
-    """Simple sensor that reads a holding register (address 0) from the device."""
+    """Sensor reading a specific register defined in `registers.SENSORS`."""
 
-    def __init__(self, manager: ModbusClientManager, entry: ConfigEntry) -> None:
+    def __init__(
+        self, manager: ModbusClientManager, entry: ConfigEntry, definition
+    ) -> None:
         self._manager = manager
         self._entry = entry
-        self._attr_name = f"{entry.title} Register 0"
+        self._definition = definition
+        self._attr_name = f"{entry.title} {definition.name}"
         self._state = None
+        if definition.device_class:
+            self._attr_device_class = definition.device_class
+        if definition.unit_of_measurement:
+            self._attr_native_unit_of_measurement = definition.unit_of_measurement
+        if definition.accuracy_decimals is not None:
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if definition.entity_category:
+            self._attr_entity_category = definition.entity_category
 
     @property
     def device_info(self):
@@ -54,8 +68,11 @@ class PlumEcoventSensor(SensorEntity):
         return self._state
 
     async def async_update(self) -> None:
-        result = await self._manager.read_holding_registers(0, 1)
+        result = await self._manager.read_holding_registers(
+            self._definition.address, 1
+        )
         if result and hasattr(result, "registers"):
             self._state = result.registers[0]
         else:
             self._state = None
+

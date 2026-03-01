@@ -20,7 +20,7 @@ except Exception:  # Running outside Home Assistant for tests
 
     from typing import Any as AddEntitiesCallback  # type: ignore
 
-from .const import DOMAIN, REG_BINARY
+from .const import DOMAIN
 from .modbus_client import ModbusClientManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,17 +30,29 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     manager: ModbusClientManager = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PlumEcoventBinarySensor(manager, entry)], True)
+    from .registers import BINARY_SENSORS
+
+    entities = []
+    for definition in BINARY_SENSORS:
+        entities.append(PlumEcoventBinarySensor(manager, entry, definition))
+    async_add_entities(entities, True)
 
 
 class PlumEcoventBinarySensor(BinarySensorEntity):
-    """Simple binary sensor that reads a register from the device."""
+    """Binary sensor that reads a particular Modbus register."""
 
-    def __init__(self, manager: ModbusClientManager, entry: ConfigEntry) -> None:
+    def __init__(
+        self, manager: ModbusClientManager, entry: ConfigEntry, definition
+    ) -> None:
         self._manager = manager
         self._entry = entry
-        self._attr_name = f"{entry.title} Binary Sensor"
+        self._definition = definition
+        self._attr_name = f"{entry.title} {definition.name}"
         self._attr_is_on = False
+        if definition.device_class is not None:
+            self._attr_device_class = definition.device_class
+        if definition.entity_category is not None:
+            self._attr_entity_category = definition.entity_category
 
     @property
     def device_info(self):
@@ -52,8 +64,11 @@ class PlumEcoventBinarySensor(BinarySensorEntity):
         }
 
     async def async_update(self) -> None:
-        result = await self._manager.read_holding_registers(REG_BINARY, 1)
+        result = await self._manager.read_holding_registers(
+            self._definition.address, 1
+        )
         if result and hasattr(result, "registers"):
             self._attr_is_on = bool(result.registers[0])
         else:
             self._attr_is_on = False
+

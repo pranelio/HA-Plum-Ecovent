@@ -20,7 +20,7 @@ except Exception:  # Running outside Home Assistant for tests
 
     from typing import Any as AddEntitiesCallback  # type: ignore
 
-from .const import DOMAIN, REG_NUMBER
+from .const import DOMAIN
 from .modbus_client import ModbusClientManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,17 +30,37 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     manager: ModbusClientManager = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PlumEcoventNumber(manager, entry)], True)
+    from .registers import NUMBERS
+
+    entities = []
+    for definition in NUMBERS:
+        entities.append(PlumEcoventNumber(manager, entry, definition))
+    async_add_entities(entities, True)
 
 
 class PlumEcoventNumber(NumberEntity):
-    """Simple number entity tied to a modbus register."""
+    """Number entity representing a register."""
 
-    def __init__(self, manager: ModbusClientManager, entry: ConfigEntry) -> None:
+    def __init__(
+        self, manager: ModbusClientManager, entry: ConfigEntry, definition
+    ) -> None:
         self._manager = manager
         self._entry = entry
-        self._attr_name = f"{entry.title} Number"
+        self._definition = definition
+        self._attr_name = f"{entry.title} {definition.name}"
         self._attr_native_value = 0
+        if definition.unit_of_measurement:
+            self._attr_native_unit_of_measurement = definition.unit_of_measurement
+        if definition.device_class:
+            self._attr_device_class = definition.device_class
+        if definition.entity_category:
+            self._attr_entity_category = definition.entity_category
+        if definition.step is not None:
+            self._attr_native_step = definition.step
+        if definition.min_value is not None:
+            self._attr_native_min_value = definition.min_value
+        if definition.max_value is not None:
+            self._attr_native_max_value = definition.max_value
 
     @property
     def device_info(self):
@@ -52,13 +72,15 @@ class PlumEcoventNumber(NumberEntity):
         }
 
     async def async_update(self) -> None:
-        result = await self._manager.read_holding_registers(REG_NUMBER, 1)
+        result = await self._manager.read_holding_registers(
+            self._definition.address, 1
+        )
         if result and hasattr(result, "registers"):
             self._attr_native_value = result.registers[0]
         else:
             self._attr_native_value = 0
 
     async def async_set_native_value(self, value: float) -> None:
-        # write integer part for simplicity
-        await self._manager.write_register(REG_NUMBER, int(value))
+        await self._manager.write_register(self._definition.address, int(value))
         self._attr_native_value = value
+
