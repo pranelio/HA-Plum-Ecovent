@@ -23,6 +23,7 @@ class DummyCoordinator:
     def __init__(self, data):
         self.data = data
         self.last_update_success = True
+        self.update_interval = None
 
     async def async_request_refresh(self):
         return self

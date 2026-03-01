@@ -58,8 +58,9 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
+        name_slug = definition.name.replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
-        self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{definition.name}"
+        self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{name_slug}"
         self._attr_native_value = 0
         if definition.unit_of_measurement:
             self._attr_native_unit_of_measurement = definition.unit_of_measurement
@@ -87,7 +88,7 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         }
 
     async def async_update(self) -> None:
-        if self.coordinator:
+        if self.coordinator and self.coordinator.update_interval is None:
             await self.coordinator.async_request_refresh()
 
     async def async_set_native_value(self, value: float) -> None:

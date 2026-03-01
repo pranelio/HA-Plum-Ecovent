@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, Iterable, Tuple
+from datetime import timedelta
 
 try:
     from homeassistant.helpers.update_coordinator import (  # type: ignore
@@ -42,12 +43,12 @@ _LOGGER = logging.getLogger(__name__)
 class PlumEcoventCoordinator(DataUpdateCoordinator):
     """Batch Modbus reads and fan out to entities."""
 
-    def __init__(self, hass, manager, definitions: Iterable[Any]):
+    def __init__(self, hass, manager, definitions: Iterable[Any], update_rate: int):
         super().__init__(
             hass,
             _LOGGER,
             name="plum_ecovent_data",
-            update_interval=None,  # rely on entity polling interval
+            update_interval=timedelta(seconds=update_rate),
         )
         self._manager = manager
         self._defs = list(definitions)

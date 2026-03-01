@@ -5,11 +5,12 @@ Minimal async setup and setup_entry placeholders.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE
 from .modbus_client import ModbusClientManager
 from .coordinator import PlumEcoventCoordinator
 
@@ -37,6 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from . import registers
 
+    update_rate = int(entry.data.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE))
     coordinator = PlumEcoventCoordinator(
         hass,
         manager,
@@ -46,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             *registers.SWITCHES,
             *registers.NUMBERS,
         ],
+        update_rate,
     )
 
     try:

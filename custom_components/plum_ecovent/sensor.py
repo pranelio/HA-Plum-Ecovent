@@ -57,8 +57,9 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
+        name_slug = definition.name.replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
-        self._attr_unique_id = f"{entry.entry_id}_sensor_{definition.address}_{definition.name}"
+        self._attr_unique_id = f"{entry.entry_id}_sensor_{definition.address}_{name_slug}"
         self._state = None
         if definition.device_class:
             self._attr_device_class = definition.device_class
@@ -91,6 +92,7 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         return value
 
     async def async_update(self) -> None:
-        if self.coordinator:
+        # Respect coordinator schedule; only force refresh if no interval set
+        if self.coordinator and self.coordinator.update_interval is None:
             await self.coordinator.async_request_refresh()
 

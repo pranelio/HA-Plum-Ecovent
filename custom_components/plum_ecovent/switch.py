@@ -58,8 +58,9 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
+        name_slug = definition.name.replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
-        self._attr_unique_id = f"{entry.entry_id}_switch_{definition.address}_{definition.name}"
+        self._attr_unique_id = f"{entry.entry_id}_switch_{definition.address}_{name_slug}"
         self._attr_is_on = False
         if definition.entity_category is not None:
             try:
@@ -77,7 +78,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         }
 
     async def async_update(self) -> None:
-        if self.coordinator:
+        if self.coordinator and self.coordinator.update_interval is None:
             await self.coordinator.async_request_refresh()
 
     @property

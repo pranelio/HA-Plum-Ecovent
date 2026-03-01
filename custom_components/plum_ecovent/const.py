@@ -16,3 +16,7 @@ REG_NUMBER = 3
 # Modbus slave address/unit identifier (1–255)
 CONF_UNIT = "unit"
 DEFAULT_UNIT = 1
+
+# Update rate in seconds for polling registers
+CONF_UPDATE_RATE = "update_rate"
+DEFAULT_UPDATE_RATE = 30
