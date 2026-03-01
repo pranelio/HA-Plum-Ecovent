@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_MODBUS_TYPE, default=MODBUS_TYPE_TCP): str})
 
 
-class PlumEcoventConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Plum Ecovent."""
 
     VERSION = 1
