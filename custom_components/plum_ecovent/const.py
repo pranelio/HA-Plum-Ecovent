@@ -18,3 +18,7 @@ REG_SENSOR = 0
 REG_BINARY = 1
 REG_SWITCH = 2
 REG_NUMBER = 3
+
+# Modbus slave address/unit identifier (1–255)
+CONF_UNIT = "unit"
+DEFAULT_UNIT = 1

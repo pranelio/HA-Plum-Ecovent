@@ -18,6 +18,7 @@ from .const import (
     MODBUS_TYPE_RTU,
     CONF_SERIAL_PORT,
     CONF_BAUDRATE,
+    CONF_UNIT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_HOST, default="127.0.0.1"): str,
                     vol.Required(CONF_PORT, default=502): int,
+                    vol.Required(CONF_UNIT, default=1): vol.All(int, vol.Range(min=1, max=255)),
                     vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
                 }
             )
@@ -57,6 +59,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_SERIAL_PORT, default="/dev/ttyUSB0"): str,
                     vol.Required(CONF_BAUDRATE, default=9600): int,
+                    vol.Required(CONF_UNIT, default=1): vol.All(int, vol.Range(min=1, max=255)),
                     vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
                 }
             )

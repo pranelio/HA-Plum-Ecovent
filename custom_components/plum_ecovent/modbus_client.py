@@ -37,6 +37,9 @@ class ModbusClientManager:
         self.hass = hass
         self.config = config
         self._client = None
+        # unit id (slave address)
+        from .const import DEFAULT_UNIT, CONF_UNIT
+        self.unit = int(self.config.get(CONF_UNIT, DEFAULT_UNIT))
 
     async def async_connect(self) -> bool:
         """Create and connect the underlying pymodbus async client."""
@@ -89,25 +92,33 @@ class ModbusClientManager:
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Error closing Modbus client")
 
-    async def read_holding_registers(self, address: int, count: int, unit: int = 1) -> Any:
+    async def read_holding_registers(
+        self, address: int, count: int, unit: int | None = None
+    ) -> Any:
         """Read holding registers — returns pymodbus result or None."""
         if not self._client:
             _LOGGER.debug("No Modbus client available for read")
             return None
         try:
-            result = await self._client.read_holding_registers(address, count, unit=unit)
+            use_unit = self.unit if unit is None else unit
+            result = await self._client.read_holding_registers(
+                address, count, unit=use_unit
+            )
             return result
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
             return None
 
-    async def write_register(self, address: int, value: int, unit: int = 1) -> bool:
+    async def write_register(
+        self, address: int, value: int, unit: int | None = None
+    ) -> bool:
         """Write single register. Returns True on success."""
         if not self._client:
             _LOGGER.debug("No Modbus client available for write")
             return False
         try:
-            result = await self._client.write_register(address, value, unit=unit)
+            use_unit = self.unit if unit is None else unit
+            result = await self._client.write_register(address, value, unit=use_unit)
             return result is not None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")

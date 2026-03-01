@@ -7,7 +7,12 @@ class DummyResult:
 
 
 class DummyManager:
+    def __init__(self):
+        self.unit = None
+
     async def read_holding_registers(self, address, count, unit=1):
+        # record unit passed
+        self.unit = unit
         await asyncio.sleep(0)
         return DummyResult([42])
 
@@ -40,6 +45,20 @@ def test_sensor_async_update():
         assert sensor.native_value == 42
     finally:
         loop.close()
+
+
+
+
+def test_manager_unit_handling():
+    """ModbusClientManager should store the unit from config."""
+
+    from custom_components.plum_ecovent.modbus_client import ModbusClientManager
+    from custom_components.plum_ecovent.const import CONF_UNIT
+
+    mgr = ModbusClientManager(None, {CONF_UNIT: 5})
+    assert mgr.unit == 5
+    mgr2 = ModbusClientManager(None, {})
+    assert mgr2.unit == 1
 
 
 def test_other_entities():
