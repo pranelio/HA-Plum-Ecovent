@@ -119,16 +119,20 @@ class ModbusClientManager:
         try:
             use_unit = self.unit if unit is None else unit
             # some pymodbus versions expect `unit` keyword, others take it as
-            # positional argument.  attempt keyword first and fall back if
-            # signature mismatch.
+            # positional argument or ignore it entirely.  try a sequence of
+            # combinations until one works.
             try:
                 result = await self._client.read_holding_registers(
                     address, count, unit=use_unit
                 )
             except TypeError:
-                result = await self._client.read_holding_registers(
-                    address, count, use_unit
-                )
+                try:
+                    result = await self._client.read_holding_registers(
+                        address, count, use_unit
+                    )
+                except TypeError:
+                    # maybe the method doesn't accept a unit at all
+                    result = await self._client.read_holding_registers(address, count)
             return result
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
@@ -146,7 +150,10 @@ class ModbusClientManager:
             try:
                 result = await self._client.write_register(address, value, unit=use_unit)
             except TypeError:
-                result = await self._client.write_register(address, value, use_unit)
+                try:
+                    result = await self._client.write_register(address, value, use_unit)
+                except TypeError:
+                    result = await self._client.write_register(address, value)
             return result is not None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")

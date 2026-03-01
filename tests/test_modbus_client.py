@@ -39,6 +39,25 @@ class PositionalClient:
         pass
 
 
+class NoUnitClient:
+    """Client whose methods take only address and count/value."""
+    def __init__(self):
+        self.record = []
+
+    async def read_holding_registers(self, address, count):
+        self.record.append((address, count))
+        class R:
+            registers = [2]
+        return R()
+
+    async def write_register(self, address, value):
+        self.record.append((address, value))
+        return True
+
+    async def close(self):
+        pass
+
+
 @pytest.mark.asyncio
 async def test_manager_read_write_exceptions():
     """Verify read/write return safe values when the client is missing or bad."""
@@ -135,3 +154,16 @@ async def test_read_write_positional_unit():
     ok = await mgr.write_register(5, 12)
     assert ok is True
     assert mgr._client.record[1] == (5, 12, 9)
+
+
+@pytest.mark.asyncio
+async def test_read_write_no_unit():
+    """Clients that ignore unit altogether should still work."""
+    mgr = ModbusClientManager(None, {CONF_UNIT: 11})
+    mgr._client = NoUnitClient()
+    res = await mgr.read_holding_registers(7, 2)
+    assert hasattr(res, "registers") and res.registers[0] == 2
+    assert mgr._client.record[0] == (7, 2)
+    ok = await mgr.write_register(7, 33)
+    assert ok is True
+    assert mgr._client.record[1] == (7, 33)
