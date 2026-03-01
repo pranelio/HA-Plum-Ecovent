@@ -3,6 +3,7 @@
   "name": "Plum ecoVENT",
   "version": "0.1.1-b2",
   "documentation": "https://github.com/pranelio/HA-Plum-Ecovent",
+  "brand": "plum_ecomax",
   "requirements": [
     "pymodbus>=2.5.2"
   ],
