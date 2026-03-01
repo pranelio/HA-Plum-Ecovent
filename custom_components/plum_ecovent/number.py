@@ -8,9 +8,14 @@ try:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.update_coordinator import CoordinatorEntity
 except Exception:  # Running outside Home Assistant for tests
     class NumberEntity:  # type: ignore
         pass
+
+    class CoordinatorEntity:  # type: ignore
+        def __init__(self, coordinator=None):
+            self.coordinator = coordinator
 
     class ConfigEntry:  # type: ignore
         pass
@@ -21,6 +26,7 @@ except Exception:  # Running outside Home Assistant for tests
     from typing import Any as AddEntitiesCallback  # type: ignore
 
 from .const import DOMAIN
+from .coordinator import build_definition_key
 from .modbus_client import ModbusClientManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,25 +35,30 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    manager: ModbusClientManager = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    manager: ModbusClientManager = entry_data["manager"]
+    coordinator = entry_data["coordinator"]
     from .registers import NUMBERS
 
     entities = []
     for definition in NUMBERS:
-        entities.append(PlumEcoventNumber(manager, entry, definition))
+        entities.append(PlumEcoventNumber(manager, coordinator, entry, definition))
     async_add_entities(entities, True)
 
 
-class PlumEcoventNumber(NumberEntity):
+class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
     """Number entity representing a register."""
 
     def __init__(
-        self, manager: ModbusClientManager, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
     ) -> None:
+        super().__init__(coordinator)
         self._manager = manager
         self._entry = entry
         self._definition = definition
+        self._key = build_definition_key(definition)
         self._attr_name = f"{entry.title} {definition.name}"
+        self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{definition.name}"
         self._attr_native_value = 0
         if definition.unit_of_measurement:
             self._attr_native_unit_of_measurement = definition.unit_of_measurement
@@ -72,15 +83,18 @@ class PlumEcoventNumber(NumberEntity):
         }
 
     async def async_update(self) -> None:
-        result = await self._manager.read_holding_registers(
-            self._definition.address, 1
-        )
-        if result and hasattr(result, "registers"):
-            self._attr_native_value = result.registers[0]
-        else:
-            self._attr_native_value = 0
+        if self.coordinator:
+            await self.coordinator.async_request_refresh()
 
     async def async_set_native_value(self, value: float) -> None:
         await self._manager.write_register(self._definition.address, int(value))
         self._attr_native_value = value
+
+    @property
+    def native_value(self):
+        value = None
+        if self.coordinator and self.coordinator.data is not None:
+            value = self.coordinator.data.get(self._key)
+        self._attr_available = value is not None
+        return value if value is not None else self._attr_native_value
 

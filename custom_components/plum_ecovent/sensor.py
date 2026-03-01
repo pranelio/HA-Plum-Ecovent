@@ -8,12 +8,17 @@ try:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.update_coordinator import CoordinatorEntity
 except Exception:  # Running outside Home Assistant for tests
     class SensorEntity:  # type: ignore
         pass
 
     class SensorStateClass:  # type: ignore
         MEASUREMENT = None
+
+    class CoordinatorEntity:  # type: ignore
+        def __init__(self, coordinator=None):
+            self.coordinator = coordinator
 
     class ConfigEntry:  # type: ignore
         pass
@@ -24,29 +29,35 @@ except Exception:  # Running outside Home Assistant for tests
     from typing import Any as AddEntitiesCallback  # type: ignore
 
 from .const import DOMAIN
+from .coordinator import build_definition_key
 from .modbus_client import ModbusClientManager
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    manager: ModbusClientManager = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    manager: ModbusClientManager = entry_data["manager"]
+    coordinator = entry_data["coordinator"]
     from .registers import SENSORS
 
-    entities = [PlumEcoventSensor(manager, entry, d) for d in SENSORS]
+    entities = [PlumEcoventSensor(manager, coordinator, entry, d) for d in SENSORS]
     async_add_entities(entities, True)
 
 
-class PlumEcoventSensor(SensorEntity):
+class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
     """Sensor reading a specific register defined in `registers.SENSORS`."""
 
     def __init__(
-        self, manager: ModbusClientManager, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
     ) -> None:
+        super().__init__(coordinator)
         self._manager = manager
         self._entry = entry
         self._definition = definition
+        self._key = build_definition_key(definition)
         self._attr_name = f"{entry.title} {definition.name}"
+        self._attr_unique_id = f"{entry.entry_id}_sensor_{definition.address}_{definition.name}"
         self._state = None
         if definition.device_class:
             self._attr_device_class = definition.device_class
@@ -68,14 +79,14 @@ class PlumEcoventSensor(SensorEntity):
 
     @property
     def native_value(self):
-        return self._state
+        value = None
+        if self.coordinator and self.coordinator.data is not None:
+            value = self.coordinator.data.get(self._key)
+        self._attr_available = value is not None
+        self._state = value
+        return value
 
     async def async_update(self) -> None:
-        result = await self._manager.read_holding_registers(
-            self._definition.address, 1
-        )
-        if result and hasattr(result, "registers"):
-            self._state = result.registers[0]
-        else:
-            self._state = None
+        if self.coordinator:
+            await self.coordinator.async_request_refresh()
 

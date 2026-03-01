@@ -19,6 +19,15 @@ class DummyManager:
         return DummyResult([42])
 
 
+class DummyCoordinator:
+    def __init__(self, data):
+        self.data = data
+        self.last_update_success = True
+
+    async def async_request_refresh(self):
+        return self
+
+
 def test_sensor_async_update():
     # Load the sensor module directly to avoid importing the package __init__
     import importlib.util
@@ -47,12 +56,17 @@ def test_sensor_async_update():
         unit_of_measurement = None
         accuracy_decimals = None
         entity_category = None
-    sensor = PlumEcoventSensor(manager, entry, Def())
+    from custom_components.plum_ecovent.coordinator import build_definition_key
+
+    key = build_definition_key(Def())
+    coordinator = DummyCoordinator({key: 42})
+    sensor = PlumEcoventSensor(manager, coordinator, entry, Def())
 
     loop = asyncio.new_event_loop()
     try:
         loop.run_until_complete(sensor.async_update())
         assert sensor.native_value == 42
+        assert sensor.available is True
     finally:
         loop.close()
 
@@ -106,6 +120,7 @@ def test_other_entities():
             self.written.append((address, value))
             return True
 
+    from custom_components.plum_ecovent.coordinator import build_definition_key
     manager = DummyManager2()
     entry = SimpleNamespace(title="Test", entry_id="1", data={})
 
@@ -115,9 +130,22 @@ def test_other_entities():
         SWITCHES,
         NUMBERS,
     )
-    bina = binary_mod.PlumEcoventBinarySensor(manager, entry, BINARY_SENSORS[0])
-    sw = switch_mod.PlumEcoventSwitch(manager, entry, SWITCHES[0])
-    num = number_mod.PlumEcoventNumber(manager, entry, NUMBERS[0])
+
+    binary_def = BINARY_SENSORS[0]
+    switch_def = SWITCHES[0]
+    number_def = NUMBERS[0]
+
+    coordinator = DummyCoordinator(
+        {
+            build_definition_key(binary_def): 1,
+            build_definition_key(switch_def): switch_def.bitmask,
+            build_definition_key(number_def): 4,
+        }
+    )
+
+    bina = binary_mod.PlumEcoventBinarySensor(manager, coordinator, entry, binary_def)
+    sw = switch_mod.PlumEcoventSwitch(manager, coordinator, entry, switch_def)
+    num = number_mod.PlumEcoventNumber(manager, coordinator, entry, number_def)
 
     loop = asyncio.new_event_loop()
     try:

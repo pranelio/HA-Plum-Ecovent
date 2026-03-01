@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .const import DOMAIN
 from .modbus_client import ModbusClientManager
+from .coordinator import PlumEcoventCoordinator
 
 # Platforms to set up for this integration
 PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
@@ -34,7 +35,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to connect Modbus for entry %s", entry.entry_id)
         return False
 
-    hass.data[DOMAIN][entry.entry_id] = manager
+    from . import registers
+
+    coordinator = PlumEcoventCoordinator(
+        hass,
+        manager,
+        [
+            *registers.SENSORS,
+            *registers.BINARY_SENSORS,
+            *registers.SWITCHES,
+            *registers.NUMBERS,
+        ],
+    )
+
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:  # pragma: no cover
+        _LOGGER.exception("Initial data refresh failed")
+        await manager.async_close()
+        return False
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "manager": manager,
+        "coordinator": coordinator,
+    }
 
     # ensure a device entry exists so all entities are grouped
     try:
@@ -63,8 +87,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    manager: ModbusClientManager | None = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-    if manager:
-        await manager.async_close()
+    entry_data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    if entry_data:
+        manager: ModbusClientManager | None = entry_data.get("manager")
+        if manager:
+            await manager.async_close()
 
     return unload_ok

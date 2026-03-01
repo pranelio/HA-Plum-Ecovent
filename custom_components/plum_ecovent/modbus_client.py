@@ -88,6 +88,9 @@ class ModbusClientManager:
             if connect is not None:
                 result = await connect()
                 _LOGGER.debug("Modbus connect result: %s", result)
+                if result is False:
+                    _LOGGER.error("Modbus connect() returned falsy result")
+                    return False
 
             return True
         except ModbusException as err:
@@ -133,6 +136,12 @@ class ModbusClientManager:
                 except TypeError:
                     # maybe the method doesn't accept a unit at all
                     result = await self._client.read_holding_registers(address, count)
+
+            # some pymodbus results expose isError()
+            if result is not None and hasattr(result, "isError") and callable(result.isError):
+                if result.isError():
+                    _LOGGER.error("Modbus read returned error response for address %s", address)
+                    return None
             return result
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
@@ -154,6 +163,12 @@ class ModbusClientManager:
                     result = await self._client.write_register(address, value, use_unit)
                 except TypeError:
                     result = await self._client.write_register(address, value)
+
+            if result is not None and hasattr(result, "isError") and callable(result.isError):
+                if result.isError():
+                    _LOGGER.error("Modbus write returned error response for address %s", address)
+                    return False
+
             return result is not None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")
