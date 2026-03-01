@@ -6,12 +6,17 @@ from __future__ import annotations
 
 import logging
 import inspect
+import asyncio
 from typing import Any
 
 try:
     from pymodbus.exceptions import ModbusException
+    from pymodbus.exceptions import ConnectionException
 except Exception:  # pymodbus not installed in test environments
     class ModbusException(Exception):
+        pass
+
+    class ConnectionException(ModbusException):
         pass
 
 from .const import (
@@ -127,29 +132,28 @@ class ModbusClientManager:
             # some pymodbus versions expect `unit` keyword, others take it as
             # positional argument or ignore it entirely.  try a sequence of
             # combinations until one works.
-            try:
-                result = self._client.read_holding_registers(
-                    address=address, count=count, unit=use_unit
-                )
-                if inspect.isawaitable(result):
-                    result = await result
-            except TypeError:
+            for call in (
+                lambda: self._client.read_holding_registers(address, count),
+                lambda: self._client.read_holding_registers(address=address, count=count),
+                lambda: self._client.read_holding_registers(address, count, use_unit),
+                lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
+                lambda: self._client.read_holding_registers(address),
+            ):
                 try:
-                    result = self._client.read_holding_registers(
-                        address, count, use_unit
-                    )
+                    result = call()
                     if inspect.isawaitable(result):
-                        result = await result
+                        try:
+                            result = await result
+                        except asyncio.CancelledError:
+                            _LOGGER.debug("Modbus read cancelled (likely due to unload)")
+                            return None
+                    break
                 except TypeError:
-                    try:
-                        result = self._client.read_holding_registers(address=address, count=count)
-                        if inspect.isawaitable(result):
-                            result = await result
-                    except TypeError:
-                        # last resort: address only
-                        result = self._client.read_holding_registers(address)
-                        if inspect.isawaitable(result):
-                            result = await result
+                    result = None
+                    continue
+                except ConnectionException:
+                    _LOGGER.warning("Modbus client not connected; read skipped")
+                    return None
 
             # some pymodbus results expose isError()
             if result is not None and hasattr(result, "isError") and callable(result.isError):
@@ -157,6 +161,9 @@ class ModbusClientManager:
                     _LOGGER.error("Modbus read returned error response for address %s", address)
                     return None
             return result
+        except ConnectionException:
+            _LOGGER.warning("Modbus connection error during read")
+            return None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
             return None
@@ -170,24 +177,27 @@ class ModbusClientManager:
             return False
         try:
             use_unit = self.unit if unit is None else unit
-            try:
-                result = self._client.write_register(address=address, value=value, unit=use_unit)
-                if inspect.isawaitable(result):
-                    result = await result
-            except TypeError:
+            for call in (
+                lambda: self._client.write_register(address, value),
+                lambda: self._client.write_register(address=address, value=value),
+                lambda: self._client.write_register(address, value, use_unit),
+                lambda: self._client.write_register(address=address, value=value, unit=use_unit),
+            ):
                 try:
-                    result = self._client.write_register(address, value, use_unit)
+                    result = call()
                     if inspect.isawaitable(result):
-                        result = await result
+                        try:
+                            result = await result
+                        except asyncio.CancelledError:
+                            _LOGGER.debug("Modbus write cancelled (likely due to unload)")
+                            return False
+                    break
                 except TypeError:
-                    try:
-                        result = self._client.write_register(address=address, value=value)
-                        if inspect.isawaitable(result):
-                            result = await result
-                    except TypeError:
-                        result = self._client.write_register(address, value)
-                        if inspect.isawaitable(result):
-                            result = await result
+                    result = None
+                    continue
+                except ConnectionException:
+                    _LOGGER.warning("Modbus client not connected; write skipped")
+                    return False
 
             if result is not None and hasattr(result, "isError") and callable(result.isError):
                 if result.isError():
@@ -195,6 +205,9 @@ class ModbusClientManager:
                     return False
 
             return result is not None
+        except ConnectionException:
+            _LOGGER.warning("Modbus connection error during write")
+            return False
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")
             return False

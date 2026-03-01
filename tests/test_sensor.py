@@ -61,7 +61,7 @@ def test_sensor_async_update():
 
     key = build_definition_key(Def())
     coordinator = DummyCoordinator({key: 42})
-    sensor = PlumEcoventSensor(manager, coordinator, entry, Def())
+    sensor = PlumEcoventSensor(manager, coordinator, entry, Def(), 0)
 
     loop = asyncio.new_event_loop()
     try:
