@@ -9,7 +9,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME, CONF_PORT, CONF_HOST, CONF_BAUDRATE
+from homeassistant.const import CONF_NAME, CONF_PORT, CONF_HOST
 
 from .const import (
     DOMAIN,
@@ -17,6 +17,7 @@ from .const import (
     MODBUS_TYPE_TCP,
     MODBUS_TYPE_RTU,
     CONF_SERIAL_PORT,
+    CONF_BAUDRATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
