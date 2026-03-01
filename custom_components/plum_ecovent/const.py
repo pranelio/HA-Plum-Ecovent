@@ -20,3 +20,6 @@ DEFAULT_UNIT = 1
 # Update rate in seconds for polling registers
 CONF_UPDATE_RATE = "update_rate"
 DEFAULT_UPDATE_RATE = 30
+
+# Integration version (keep in sync with manifest.json)
+__version__ = "0.2.0"
