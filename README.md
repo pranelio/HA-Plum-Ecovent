@@ -31,3 +31,25 @@ Blueprint alignment
 
 Contributing
 - See the repository README for contribution guidelines.
+
+Running tests
+
+This project uses `pytest` with the Home Assistant custom component
+helper.  To install the required packages and run the test suite, create a
+Python virtual environment and install the development requirements:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements-dev.txt
+```
+
+Then execute the tests with:
+
+```powershell
+pytest -q
+```
+
+The `pytest.ini` file configures the test discovery and ensures the
+`custom_components` directory is on `PYTHONPATH` so your modules can be
+imported directly.

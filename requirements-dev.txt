@@ -1,0 +1,7 @@
+# development dependencies for running the test suite
+pytest
+pytest-homeassistant-custom-component
+homeassistant
+homeassistant-stubs
+voluptuous
+pymodbus
