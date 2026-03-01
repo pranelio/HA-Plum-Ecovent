@@ -48,18 +48,26 @@ class ModbusClientManager:
             AsyncModbusTcpClient = None
             AsyncModbusSerialClient = None
             tried = []
+            # perform imports in executor when possible, otherwise fall back
             for modname in (
                 "pymodbus.client.async_io",
                 "pymodbus.client.async",
                 "pymodbus.client",
             ):
                 try:
-                    mod = importlib.import_module(modname)
+                    if self.hass is not None and hasattr(self.hass, "async_add_executor_job"):
+                        mod = await self.hass.async_add_executor_job(importlib.import_module, modname)
+                    else:
+                        # running in test context or no hass available
+                        mod = importlib.import_module(modname)
                     AsyncModbusTcpClient = getattr(mod, "AsyncModbusTcpClient", None)
                     AsyncModbusSerialClient = getattr(mod, "AsyncModbusSerialClient", None)
                     if AsyncModbusTcpClient:
                         break
                 except ModuleNotFoundError:
+                    tried.append(modname)
+                    continue
+                except Exception:
                     tried.append(modname)
                     continue
             if AsyncModbusTcpClient is None:
@@ -110,9 +118,17 @@ class ModbusClientManager:
             return None
         try:
             use_unit = self.unit if unit is None else unit
-            result = await self._client.read_holding_registers(
-                address, count, unit=use_unit
-            )
+            # some pymodbus versions expect `unit` keyword, others take it as
+            # positional argument.  attempt keyword first and fall back if
+            # signature mismatch.
+            try:
+                result = await self._client.read_holding_registers(
+                    address, count, unit=use_unit
+                )
+            except TypeError:
+                result = await self._client.read_holding_registers(
+                    address, count, use_unit
+                )
             return result
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
@@ -127,7 +143,10 @@ class ModbusClientManager:
             return False
         try:
             use_unit = self.unit if unit is None else unit
-            result = await self._client.write_register(address, value, unit=use_unit)
+            try:
+                result = await self._client.write_register(address, value, unit=use_unit)
+            except TypeError:
+                result = await self._client.write_register(address, value, use_unit)
             return result is not None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")

@@ -40,14 +40,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         from homeassistant.helpers import device_registry as dr
 
-        device_registry = await dr.async_get(hass)
-        device_registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="Plum",
-            model="Ecovent",
-        )
+        device_registry = dr.async_get(hass)
+        # async_get returns the registry object directly (not a coroutine)
+        if hasattr(device_registry, "async_get_or_create"):
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(DOMAIN, entry.entry_id)},
+                name=entry.title,
+                manufacturer="Plum",
+                model="Ecovent",
+            )
     except Exception:  # pragma: no cover - very unlikely failure
         _LOGGER.exception("Unable to create device registry entry")
 

@@ -4,13 +4,16 @@ from __future__ import annotations
 import logging
 
 try:
-    from homeassistant.components.sensor import SensorEntity
+    from homeassistant.components.sensor import SensorEntity, SensorStateClass
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 except Exception:  # Running outside Home Assistant for tests
     class SensorEntity:  # type: ignore
         pass
+
+    class SensorStateClass:  # type: ignore
+        MEASUREMENT = None
 
     class ConfigEntry:  # type: ignore
         pass

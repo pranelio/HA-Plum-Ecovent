@@ -20,6 +20,25 @@ class DummyClient:
         raise Exception("close failure")
 
 
+class PositionalClient:
+    """Client where read/write expect unit as positional arg."""
+    def __init__(self):
+        self.record = []
+
+    async def read_holding_registers(self, address, count, unit):
+        self.record.append((address, count, unit))
+        class R:
+            registers = [1]
+        return R()
+
+    async def write_register(self, address, value, unit):
+        self.record.append((address, value, unit))
+        return True
+
+    async def close(self):
+        pass
+
+
 @pytest.mark.asyncio
 async def test_manager_read_write_exceptions():
     """Verify read/write return safe values when the client is missing or bad."""
@@ -103,3 +122,16 @@ async def test_async_connect_success(monkeypatch):
     assert mgr._client.port == 502
     # close should not error
     await mgr.async_close()
+
+
+@pytest.mark.asyncio
+async def test_read_write_positional_unit():
+    """When client expects the unit argument positionally, our fallback works."""
+    mgr = ModbusClientManager(None, {CONF_UNIT: 9})
+    mgr._client = PositionalClient()
+    res = await mgr.read_holding_registers(5, 1)
+    assert hasattr(res, "registers") and res.registers[0] == 1
+    assert mgr._client.record[0] == (5, 1, 9)
+    ok = await mgr.write_register(5, 12)
+    assert ok is True
+    assert mgr._client.record[1] == (5, 12, 9)

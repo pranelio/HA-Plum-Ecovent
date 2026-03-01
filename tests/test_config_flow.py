@@ -73,9 +73,16 @@ async def test_async_setup_entry_creates_device(monkeypatch):
         config_entries=SimpleNamespace(async_forward_entry_setups=fake_forward),
     )
     registry = DummyRegistry()
-    async def fake_async_get(hass_obj):
+    def fake_get(hass_obj):
         return registry
-    monkeypatch.setattr(dr, "async_get", fake_async_get)
+    monkeypatch.setattr(dr, "async_get", fake_get)
+
+    # also make ModbusClientManager.async_connect always succeed so setup_entry
+    # continues past the connection check
+    from custom_components.plum_ecovent.modbus_client import ModbusClientManager
+    async def always_connect(self):
+        return True
+    monkeypatch.setattr(ModbusClientManager, "async_connect", always_connect)
 
     entry = SimpleNamespace(entry_id="abc123", title="MyUnit", data={})
     result = await async_setup_entry(hass, entry)
