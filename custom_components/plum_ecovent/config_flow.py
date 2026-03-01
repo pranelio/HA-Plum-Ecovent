@@ -1,7 +1,7 @@
 """Config flow for Plum Ecovent integration.
 
-This flow lets the user choose between Modbus TCP and Modbus RTU (serial)
-and captures the relevant connection settings.
+Asks for Modbus TCP host, port and unit address.  RTU/serial support has
+been removed; only TCP is supported.
 """
 from __future__ import annotations
 
@@ -13,18 +13,12 @@ from homeassistant.const import CONF_NAME, CONF_PORT, CONF_HOST
 
 from .const import (
     DOMAIN,
-    CONF_MODBUS_TYPE,
-    MODBUS_TYPE_TCP,
-    MODBUS_TYPE_RTU,
-    CONF_SERIAL_PORT,
-    CONF_BAUDRATE,
     CONF_UNIT,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
-STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_MODBUS_TYPE, default=MODBUS_TYPE_TCP): str})
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -36,15 +30,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data: dict = {}
 
     async def async_step_user(self, user_input=None):
+        """Initial step — ask for TCP parameters."""
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA)
-
-        self._data.update(user_input)
-        return await self.async_step_modbus_settings()
-
-    async def async_step_modbus_settings(self, user_input=None):
-        """Collect the Modbus connection settings based on chosen type."""
-        if self._data.get(CONF_MODBUS_TYPE) == MODBUS_TYPE_TCP:
             schema = vol.Schema(
                 {
                     vol.Required(CONF_HOST, default="127.0.0.1"): str,
@@ -53,35 +40,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
                 }
             )
-            step_id = "modbus_tcp"
-        else:
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_SERIAL_PORT, default="/dev/ttyUSB0"): str,
-                    vol.Required(CONF_BAUDRATE, default=9600): int,
-                    vol.Required(CONF_UNIT, default=1): vol.All(int, vol.Range(min=1, max=255)),
-                    vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
-                }
-            )
-            step_id = "modbus_rtu"
-
-        if user_input is None:
-            return self.async_show_form(step_id=step_id, data_schema=schema)
+            return self.async_show_form(step_id="user", data_schema=schema)
 
         self._data.update(user_input)
 
-        # set unique id to prevent duplicates; use host:port or serial port
-        if self._data.get(CONF_MODBUS_TYPE) == MODBUS_TYPE_TCP:
-            host = self._data.get(CONF_HOST)
-            port = self._data.get(CONF_PORT)
-            if host and port is not None:
-                await self.async_set_unique_id(f"{host}:{port}")
-                self._abort_if_unique_id_configured()
-        else:
-            serial = self._data.get(CONF_SERIAL_PORT)
-            if serial:
-                await self.async_set_unique_id(serial)
-                self._abort_if_unique_id_configured()
+        # unique id based on host/port
+        host = self._data.get(CONF_HOST)
+        port = self._data.get(CONF_PORT)
+        if host and port is not None:
+            await self.async_set_unique_id(f"{host}:{port}")
+            self._abort_if_unique_id_configured()
 
         title = self._data.get(CONF_NAME, "Plum Ecovent")
         return self.async_create_entry(title=title, data=self._data)
+

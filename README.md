@@ -1,6 +1,6 @@
 # Plum Ecovent
 
-Home Assistant integration for Plum Ecovent ventilation units using Modbus (TCP or RTU).
+Home Assistant integration for Plum Ecovent ventilation units using Modbus TCP.
 
 Installation
 - Copy the `plum_ecovent` folder into your `custom_components` folder, so the path becomes `custom_components/plum_ecovent`.
@@ -8,7 +8,7 @@ Installation
 
 Configuration
 - Configure using the UI via Integrations → Add Integration → Plum Ecovent.
-- Choose the Modbus interface type: `TCP` (host + port) or `RTU` (serial port + baudrate).
+- Provide the TCP host and port and the Modbus unit address.
 
 Platforms
 

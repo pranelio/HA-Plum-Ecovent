@@ -4,14 +4,10 @@
     "step": {
       "user": {
         "title": "Plum Ecovent setup",
-        "description": "Choose which Modbus interface to use (TCP or RTU)."
+        "description": "Enter the TCP connection parameters for the Ecovent device."
       },
       "modbus_tcp": {
         "title": "Modbus TCP settings"
-      },
-      "modbus_rtu": {
-        "title": "Modbus RTU settings"
-      }
-    }
+      }    }
   }
 }

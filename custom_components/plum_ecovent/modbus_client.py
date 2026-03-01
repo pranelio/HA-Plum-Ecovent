@@ -1,6 +1,6 @@
 """Async Modbus client manager for Plum Ecovent.
 
-Provides a small wrapper around pymodbus async clients supporting TCP and RTU.
+Provides a small wrapper around a pymodbus async TCP client.
 """
 from __future__ import annotations
 
@@ -14,12 +14,8 @@ except Exception:  # pymodbus not installed in test environments
         pass
 
 from .const import (
-    CONF_MODBUS_TYPE,
-    MODBUS_TYPE_TCP,
     CONF_HOST,
     CONF_PORT,
-    CONF_SERIAL_PORT,
-    CONF_BAUDRATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,16 +52,10 @@ class ModbusClientManager:
             AsyncModbusTcpClient = getattr(mod, "AsyncModbusTcpClient")
             AsyncModbusSerialClient = getattr(mod, "AsyncModbusSerialClient")
 
-            if self.config.get(CONF_MODBUS_TYPE) == MODBUS_TYPE_TCP:
-                host = self.config.get(CONF_HOST)
-                port = int(self.config.get(CONF_PORT, 502))
-                self._client = AsyncModbusTcpClient(host=host, port=port)
-            else:
-                port = self.config.get(CONF_SERIAL_PORT)
-                baudrate = int(self.config.get(CONF_BAUDRATE, 9600))
-                self._client = AsyncModbusSerialClient(
-                    method="rtu", port=port, baudrate=baudrate
-                )
+            # always use TCP; serial/RTU removed
+            host = self.config.get(CONF_HOST)
+            port = int(self.config.get(CONF_PORT, 502))
+            self._client = AsyncModbusTcpClient(host=host, port=port)
 
             connect = getattr(self._client, "connect", None)
             if connect is not None:
