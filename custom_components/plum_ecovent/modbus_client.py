@@ -40,17 +40,36 @@ class ModbusClientManager:
     async def async_connect(self) -> bool:
         """Create and connect the underlying pymodbus async client."""
         try:
-            # Import async client classes with fallback for pymodbus versions
-            # Avoid direct `import ... async` which is invalid syntax by using importlib
+                # dynamic import of the async client class - pymodbus has moved
+            # names across releases.  We try the known locations in order and
+            # log a clear error if none of them are available.
             import importlib
 
-            try:
-                mod = importlib.import_module("pymodbus.client.async_io")
-            except Exception:
-                mod = importlib.import_module("pymodbus.client.async")
-
-            AsyncModbusTcpClient = getattr(mod, "AsyncModbusTcpClient")
-            AsyncModbusSerialClient = getattr(mod, "AsyncModbusSerialClient")
+            AsyncModbusTcpClient = None
+            AsyncModbusSerialClient = None
+            tried = []
+            for modname in (
+                "pymodbus.client.async_io",
+                "pymodbus.client.async",
+                "pymodbus.client",
+            ):
+                try:
+                    mod = importlib.import_module(modname)
+                    AsyncModbusTcpClient = getattr(mod, "AsyncModbusTcpClient", None)
+                    AsyncModbusSerialClient = getattr(mod, "AsyncModbusSerialClient", None)
+                    if AsyncModbusTcpClient:
+                        break
+                except ModuleNotFoundError:
+                    tried.append(modname)
+                    continue
+            if AsyncModbusTcpClient is None:
+                _LOGGER.error(
+                    "pymodbus asynchronous client class not found; tried %s. "
+                    "Ensure pymodbus>=2.5 is installed in the Home Assistant "
+                    "environment",
+                    tried,
+                )
+                return False
 
             # always use TCP; serial/RTU removed
             host = self.config.get(CONF_HOST)

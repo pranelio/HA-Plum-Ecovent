@@ -54,6 +54,24 @@ async def test_async_connect_import_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_async_connect_no_async_class(monkeypatch, caplog):
+    """Logging occurs when module is present but class is missing."""
+    mgr = ModbusClientManager(None, {CONF_HOST: "1.2.3.4", CONF_PORT: 502})
+
+    class DummyMod:
+        pass
+
+    import importlib
+    # return DummyMod for any requested module name
+    monkeypatch.setattr(importlib, "import_module", lambda name: DummyMod)
+
+    caplog.set_level("ERROR")
+    result = await mgr.async_connect()
+    assert result is False
+    assert "pymodbus asynchronous client class not found" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_async_connect_success(monkeypatch):
     """Simulate a working AsyncModbusTcpClient with connect/close methods."""
     mgr = ModbusClientManager(None, {CONF_HOST: "1.2.3.4", CONF_PORT: 502})

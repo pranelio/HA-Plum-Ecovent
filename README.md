@@ -24,6 +24,19 @@ from the UI or automations.
 HACS users can install directly from a release or the repository URL; the
 `hacs.json` metadata ensures the integration appears correctly.
 
+> **Note:** this integration depends on the `pymodbus` Python package. Home
+> Assistant will normally install it automatically, but if you see an error
+> such as
+> 
+> ```
+> Unexpected error creating Modbus client
+> ModuleNotFoundError: No module named 'pymodbus.client.async'
+> ```
+> 
+> make sure your environment has `pymodbus>=2.5` available (you can install
+> it manually with `pip install pymodbus`).  The component logs a clear
+> message when the async client class cannot be imported.
+
 
 ## Usage
 The integration registers a single device representing the controller.  Four
@@ -60,6 +73,7 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 pytest -q
 ```
+
 
 
 ## Contributing
