@@ -13,7 +13,7 @@ from .const import DOMAIN
 from .modbus_client import ModbusClientManager
 
 # Platforms to set up for this integration
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
 
 _LOGGER = logging.getLogger(__name__)
 

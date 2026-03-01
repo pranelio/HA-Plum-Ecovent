@@ -67,5 +67,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._data.update(user_input)
 
+        # set unique id to prevent duplicates; use host:port or serial port
+        if self._data.get(CONF_MODBUS_TYPE) == MODBUS_TYPE_TCP:
+            host = self._data.get(CONF_HOST)
+            port = self._data.get(CONF_PORT)
+            if host and port is not None:
+                await self.async_set_unique_id(f"{host}:{port}")
+                self._abort_if_unique_id_configured()
+        else:
+            serial = self._data.get(CONF_SERIAL_PORT)
+            if serial:
+                await self.async_set_unique_id(serial)
+                self._abort_if_unique_id_configured()
+
         title = self._data.get(CONF_NAME, "Plum Ecovent")
         return self.async_create_entry(title=title, data=self._data)
