@@ -1,86 +1,49 @@
-# Plum Ecovent
+# Plum Ecovent (Home Assistant custom integration)
 
-A custom Home Assistant integration that communicates with Plum Ecovent
-ventilation units over **Modbus TCP**.  It exposes controller registers as
-standard Home Assistant entities, allowing you to monitor temperatures,
-fan speeds, filter status and to change configuration parameters directly
-from the UI or automations.
+Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integration exposes controller registers as standard Home Assistant entities (sensors, binary sensors, switches, numbers) with device registry support, configurable polling interval, and HACS-friendly packaging.
 
-> ✅ **Purpose:** control and observe a Plum Ecovent system via its built-in
-> Modbus interface. Ideal when native support is missing from Home Assistant
-> or when you want full access to the unit's registers.
-
+## Features
+- Modbus TCP client with robust signature fallbacks and connection-safe shutdown
+- Auto-created device and entities for key registers (temps, fans, filters, modes, setpoints)
+- Configurable polling interval (`update_rate`) and unit id
+- Unique IDs and entity categories for full UI management
 
 ## Installation
-1. Clone or download this repository.
-2. Copy the `plum_ecovent` directory into your Home Assistant
-   `custom_components` folder (e.g. `/config/custom_components/plum_ecovent`).
-3. Restart Home Assistant.
-4. Navigate to **Settings → Devices & Services → Add Integration** and search
-   for *Plum Ecovent*.
-5. Provide the IP address and port of the Modbus TCP server on your Ecovent
-   device, and the Modbus unit ID (usually `1`).
+### HACS (recommended)
+1) In HACS, choose **Custom repositories** → add this repo as **Integration**.  
+2) Install **Plum Ecovent** from HACS.  
+3) Restart Home Assistant.
 
-HACS users can install directly from a release or the repository URL; the
-`hacs.json` metadata ensures the integration appears correctly.
+### Manual
+1) Copy `custom_components/plum_ecovent/` into `/config/custom_components/plum_ecovent/`.  
+2) Restart Home Assistant.
 
-> **Note:** this integration depends on the `pymodbus` Python package. Home
-> Assistant will normally install it automatically, but if you see an error
-> such as
-> 
-> ```
-> Unexpected error creating Modbus client
-> ModuleNotFoundError: No module named 'pymodbus.client.async'
-> ```
-> 
-> make sure your environment has `pymodbus>=2.5` available (you can install
-> it manually with `pip install pymodbus`).  The component logs a clear
-> message when the async client class cannot be imported.
+## Configuration
+1) Go to **Settings → Devices & Services → Add Integration** and search for *Plum Ecovent*.  
+2) Enter:
+   - Host/IP of the Ecovent Modbus TCP server
+   - Port (default `502`)
+   - Unit ID (default `1`)
+   - Update rate in seconds (default `30`)
+3) A device is created with entities for sensors, binary sensors, switches, and numbers from `registers.py`.
 
+### Options / Tuning
+- `update_rate`: coordinator polling interval (seconds). Set higher to reduce bus load; lower for faster updates.  
+- Edit `custom_components/plum_ecovent/registers.py` to add/remove registers or adjust metadata (units, categories, skip intervals, filters).
 
 ## Usage
-The integration registers a single device representing the controller.  Four
-platforms are supported by default (sensor, binary_sensor, switch, number),
-and each entity corresponds to a specific Modbus register.  Entities are
-created automatically from the definitions in
-`custom_components/plum_ecovent/registers.py`.
+- Entities expose live values (e.g., CO2, temperatures, fan speeds) and controls (boost/auto, heater bits, numeric setpoints).  
+- Automations can react to entity state or call services to write registers via the switch/number entities.  
+- Availability reflects Modbus read/write health; connection issues log warnings.
 
-You can customise which registers are read or written by editing that file,
-or override values via the UI once the integration is set up.
+## Requirements
+- Home Assistant Core / OS / Supervised with network access to the Ecovent.  
+- `pymodbus` is pulled automatically; ensure outbound TCP to the device port.
 
-Typical entities include:
-
-* **Temperature sensors** (CO2, supply/exhaust, outdoor, etc.)
-* **Binary diagnostics** such as filter replacement needed or heater status
-* **Switches** for modes like `Auto` or `Boost`
-* **Numbers** for fan speed settings, temperature setpoints, etc.
-
-Use Home Assistant automations to trigger actions based on sensor values or
-to adjust configuration periodically.
-
-
-## Development
-- Written in Python using the Home Assistant developer framework.
-- Modbus handled by [`pymodbus`](https://pymodbus.readthedocs.io/).
-
-If you want to modify or extend the integration, follow the instructions in
-`tests` to set up a development environment and run the unit tests.
-
-### Running tests
-```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements-dev.txt
-pytest -q
-```
-
-
+## Troubleshooting
+- Duplicate unique_id warnings: reload the integration after updates so new IDs are applied.  
+- Connection errors: verify IP/port, unit ID, and firewall; increase `update_rate` if the bus is saturated.  
+- Signature/type errors: integration already falls back across pymodbus signatures; update to latest release if you still see them.
 
 ## Contributing
-Contributions are welcome!  Please open an issue or pull request on GitHub
-and include a description of the change and any testing performed.
-
----
-
-*(This README is intended for users of the integration; developer-focused
-notes have been moved to the repository itself.)*
+PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
