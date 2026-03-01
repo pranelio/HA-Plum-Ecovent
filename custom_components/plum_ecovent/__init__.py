@@ -12,6 +12,9 @@ from homeassistant.config_entries import ConfigEntry
 from .const import DOMAIN
 from .modbus_client import ModbusClientManager
 
+# Platforms to set up for this integration
+PLATFORMS = ["sensor"]
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -32,13 +35,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
     hass.data[DOMAIN][entry.entry_id] = manager
+
+    # Forward setup to platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    # Placeholder: clean up connections
     _LOGGER.info("Unloading Plum Ecovent entry: %s", entry.title)
+    # Unload platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     manager: ModbusClientManager | None = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if manager:
         await manager.async_close()
-    return True
+
+    return unload_ok

@@ -7,7 +7,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pymodbus.exceptions import ModbusException
+try:
+    from pymodbus.exceptions import ModbusException
+except Exception:  # pymodbus not installed in test environments
+    class ModbusException(Exception):
+        pass
 
 from .const import (
     CONF_MODBUS_TYPE,
@@ -38,17 +42,16 @@ class ModbusClientManager:
         """Create and connect the underlying pymodbus async client."""
         try:
             # Import async client classes with fallback for pymodbus versions
+            # Avoid direct `import ... async` which is invalid syntax by using importlib
+            import importlib
+
             try:
-                # pymodbus >= 2.5
-                from pymodbus.client.async_io import (
-                    AsyncModbusTcpClient,
-                    AsyncModbusSerialClient,
-                )
+                mod = importlib.import_module("pymodbus.client.async_io")
             except Exception:
-                from pymodbus.client.async import (
-                    AsyncModbusTcpClient,
-                    AsyncModbusSerialClient,
-                )
+                mod = importlib.import_module("pymodbus.client.async")
+
+            AsyncModbusTcpClient = getattr(mod, "AsyncModbusTcpClient")
+            AsyncModbusSerialClient = getattr(mod, "AsyncModbusSerialClient")
 
             if self.config.get(CONF_MODBUS_TYPE) == MODBUS_TYPE_TCP:
                 host = self.config.get(CONF_HOST)
