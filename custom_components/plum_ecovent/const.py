@@ -25,5 +25,12 @@ DEFAULT_UPDATE_RATE = 30
 CONF_OPTIONAL_FORCE_ENABLE = "optional_force_enable"
 CONF_OPTIONAL_DISABLE = "optional_disable"
 
+# Device identity metadata (fetched once via Modbus)
+CONF_DEVICE_SERIAL = "device_serial"
+CONF_DEVICE_NAME = "device_name"
+CONF_FIRMWARE_VERSION = "firmware_version"
+CONF_DEVICE_INFO_PENDING_FETCH = "device_info_pending_fetch"
+CONF_DEVICE_INFO_FETCH_ATTEMPTED = "device_info_fetch_attempted"
+
 # Integration version (keep in sync with manifest.json)
 __version__ = "0.3.0-b1"

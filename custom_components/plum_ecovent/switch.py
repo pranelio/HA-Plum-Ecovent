@@ -39,6 +39,7 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
+    device_info = entry_data.get("device_info")
     discovered = entry_data.get("definitions", {})
     switches = discovered.get("switch", [])
     if "switch" not in discovered:
@@ -46,7 +47,7 @@ async def async_setup_entry(
 
     entities = []
     for definition in switches:
-        entities.append(PlumEcoventSwitch(manager, coordinator, entry, definition))
+        entities.append(PlumEcoventSwitch(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 
 
@@ -54,7 +55,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
     """Switch representing a Modbus coil/bitmask."""
 
     def __init__(
-        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
     ) -> None:
         super().__init__(coordinator)
         self._manager = manager
@@ -65,6 +66,12 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_switch_{definition.address}_{name_slug}"
         self._attr_is_on = False
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
         if definition.entity_category is not None:
             try:
                 self._attr_entity_category = EntityCategory(definition.entity_category)
@@ -73,12 +80,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": self._entry.title,
-            "manufacturer": "Plum",
-            "model": "Ecovent",
-        }
+        return self._device_info
 
     async def async_update(self) -> None:
         if self.coordinator and self.coordinator.update_interval is None:

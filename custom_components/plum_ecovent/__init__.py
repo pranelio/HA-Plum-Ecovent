@@ -16,7 +16,13 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_DEVICE_SERIAL,
+    CONF_DEVICE_NAME,
+    CONF_FIRMWARE_VERSION,
+    CONF_DEVICE_INFO_PENDING_FETCH,
+    CONF_DEVICE_INFO_FETCH_ATTEMPTED,
 )
+from .device_info import decode_utf8_registers, format_firmware
 from .modbus_client import ModbusClientManager
 from .coordinator import PlumEcoventCoordinator
 
@@ -36,12 +42,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     _LOGGER.info("Setting up Plum Ecovent entry: %s", entry.title)
 
-    config = {**entry.data, **entry.options}
+    entry_data = dict(entry.data)
+    entry_options = dict(getattr(entry, "options", {}) or {})
+    config = {**entry_data, **entry_options}
     manager = ModbusClientManager(hass, config)
     connected = await manager.async_connect()
     if not connected:
         _LOGGER.error("Failed to connect Modbus for entry %s", entry.entry_id)
         return False
+
+    refreshed_data = await _async_refresh_device_identity_once(hass, entry, manager, entry_data)
+    if refreshed_data is not None:
+        entry_data = refreshed_data
+        config = {**entry_data, **entry_options}
 
     from . import registers
     discovered_definitions = await _async_discover_definitions(manager, registers, config)
@@ -75,6 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "definitions": discovered_definitions,
         "discovered_entities": discovered_entities,
+        "device_info": _build_device_info(entry, config),
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -91,7 +105,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 identifiers={(DOMAIN, entry.entry_id)},
                 name=entry.title,
                 manufacturer="Plum",
-                model="Ecovent",
+                model=str(config.get(CONF_DEVICE_NAME) or "Ecovent"),
+                serial_number=config.get(CONF_DEVICE_SERIAL),
+                sw_version=config.get(CONF_FIRMWARE_VERSION),
             )
     except Exception:  # pragma: no cover - very unlikely failure
         _LOGGER.exception("Unable to create device registry entry")
@@ -212,3 +228,75 @@ async def _async_discover_definitions(
     )
 
     return discovered
+
+
+async def _async_read_device_identity(manager: ModbusClientManager) -> dict[str, str]:
+    """Read static identity registers from device."""
+    result: dict[str, str] = {}
+
+    firmware_response = await manager.read_holding_registers(16, 1)
+    if firmware_response is not None and hasattr(firmware_response, "registers") and firmware_response.registers:
+        firmware = format_firmware(firmware_response.registers[0])
+        if firmware:
+            result[CONF_FIRMWARE_VERSION] = firmware
+
+    name_response = await manager.read_holding_registers(17, 8)
+    if name_response is not None and hasattr(name_response, "registers") and name_response.registers:
+        device_name = decode_utf8_registers(list(name_response.registers))
+        if device_name:
+            result[CONF_DEVICE_NAME] = device_name
+
+    serial_response = await manager.read_holding_registers(25, 5)
+    if serial_response is not None and hasattr(serial_response, "registers") and serial_response.registers:
+        serial = decode_utf8_registers(list(serial_response.registers))
+        if serial:
+            result[CONF_DEVICE_SERIAL] = serial
+
+    return result
+
+
+def _build_device_info(entry: ConfigEntry, config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "identifiers": {(DOMAIN, entry.entry_id)},
+        "name": entry.title,
+        "manufacturer": "Plum",
+        "model": str(config.get(CONF_DEVICE_NAME) or "Ecovent"),
+        "serial_number": config.get(CONF_DEVICE_SERIAL),
+        "sw_version": config.get(CONF_FIRMWARE_VERSION),
+    }
+
+
+async def _async_refresh_device_identity_once(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    manager: ModbusClientManager,
+    entry_data: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Fetch identity at most once after setup when needed.
+
+    This handles:
+    - pre-feature entries that don't have stored identity fields yet,
+    - entries where config-flow read failed and requested one retry.
+    """
+    has_identity = all(
+        bool(entry_data.get(key))
+        for key in (CONF_DEVICE_NAME, CONF_DEVICE_SERIAL, CONF_FIRMWARE_VERSION)
+    )
+    pending_retry = bool(entry_data.get(CONF_DEVICE_INFO_PENDING_FETCH, False))
+    attempted = bool(entry_data.get(CONF_DEVICE_INFO_FETCH_ATTEMPTED, False))
+
+    should_attempt = (pending_retry or not has_identity) and not attempted
+    if not should_attempt:
+        return None
+
+    identity = await _async_read_device_identity(manager)
+    new_data = dict(entry_data)
+    new_data.update(identity)
+    new_data[CONF_DEVICE_INFO_PENDING_FETCH] = False
+    new_data[CONF_DEVICE_INFO_FETCH_ATTEMPTED] = True
+
+    if new_data != entry_data:
+        if hasattr(hass, "config_entries") and hasattr(hass.config_entries, "async_update_entry"):
+            hass.config_entries.async_update_entry(entry, data=new_data)
+        return new_data
+    return None

@@ -13,8 +13,10 @@ import socket
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_PORT, CONF_HOST
+from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
+from .device_info import decode_utf8_registers, format_firmware
 from .const import (
     DOMAIN,
     CONF_UNIT,
@@ -22,7 +24,13 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_DEVICE_SERIAL,
+    CONF_DEVICE_NAME,
+    CONF_FIRMWARE_VERSION,
+    CONF_DEVICE_INFO_PENDING_FETCH,
+    CONF_DEVICE_INFO_FETCH_ATTEMPTED,
 )
+from .modbus_client import ModbusClientManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,8 +92,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors={"base": connection_error},
                 )
 
+        identity = await _async_fetch_device_identity(self.hass, self._data)
+        if identity:
+            self._data.update(identity)
+            self._data[CONF_DEVICE_INFO_PENDING_FETCH] = False
+            self._data[CONF_DEVICE_INFO_FETCH_ATTEMPTED] = True
+        else:
+            # During first setup: schedule one post-setup retry only.
+            self._data[CONF_DEVICE_INFO_PENDING_FETCH] = True
+            self._data[CONF_DEVICE_INFO_FETCH_ATTEMPTED] = False
+
         title = self._data.get(CONF_NAME, "Plum Ecovent")
         return self.async_create_entry(title=title, data=self._data)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(entry: config_entries.ConfigEntry):
+        return OptionsFlowHandler(entry)
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
@@ -172,6 +195,39 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
 async def async_get_options_flow(entry: config_entries.ConfigEntry):
     return OptionsFlowHandler(entry)
+
+
+async def _async_fetch_device_identity(hass, config: dict) -> dict[str, str]:
+    """Read static device metadata registers once during config flow."""
+    manager = ModbusClientManager(hass, config)
+    connected = await manager.async_connect()
+    if not connected:
+        return {}
+
+    try:
+        result: dict[str, str] = {}
+
+        firmware_response = await manager.read_holding_registers(16, 1)
+        if firmware_response is not None and hasattr(firmware_response, "registers") and firmware_response.registers:
+            firmware = format_firmware(firmware_response.registers[0])
+            if firmware:
+                result[CONF_FIRMWARE_VERSION] = firmware
+
+        name_response = await manager.read_holding_registers(17, 8)
+        if name_response is not None and hasattr(name_response, "registers") and name_response.registers:
+            device_name = decode_utf8_registers(list(name_response.registers))
+            if device_name:
+                result[CONF_DEVICE_NAME] = device_name
+
+        serial_response = await manager.read_holding_registers(25, 5)
+        if serial_response is not None and hasattr(serial_response, "registers") and serial_response.registers:
+            serial = decode_utf8_registers(list(serial_response.registers))
+            if serial:
+                result[CONF_DEVICE_SERIAL] = serial
+
+        return result
+    finally:
+        await manager.async_close()
 
 
 async def _async_test_connection(host: str, port: int, timeout: float = 5.0) -> str | None:

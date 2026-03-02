@@ -39,6 +39,7 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
+    device_info = entry_data.get("device_info")
     discovered = entry_data.get("definitions", {})
     binary_sensors = discovered.get("binary_sensor", [])
     if "binary_sensor" not in discovered:
@@ -46,7 +47,7 @@ async def async_setup_entry(
 
     entities = []
     for definition in binary_sensors:
-        entities.append(PlumEcoventBinarySensor(manager, coordinator, entry, definition))
+        entities.append(PlumEcoventBinarySensor(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 
 
@@ -54,7 +55,7 @@ class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor that reads a particular Modbus register."""
 
     def __init__(
-        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
     ) -> None:
         super().__init__(coordinator)
         self._manager = manager
@@ -65,6 +66,12 @@ class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_binary_{definition.address}_{name_slug}"
         self._attr_is_on = False
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
         if definition.device_class is not None:
             self._attr_device_class = definition.device_class
         if definition.entity_category is not None:
@@ -75,12 +82,7 @@ class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": self._entry.title,
-            "manufacturer": "Plum",
-            "model": "Ecovent",
-        }
+        return self._device_info
 
     async def async_update(self) -> None:
         if self.coordinator and self.coordinator.update_interval is None:
