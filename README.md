@@ -48,3 +48,18 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 
 ## Contributing
 PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
+
+## Release Process
+Use the release checklist in `RELEASE.md` for every release.
+
+Quick flow:
+1) Update version in:
+   - `custom_components/plum_ecovent/manifest.json` (`version`)
+   - `custom_components/plum_ecovent/const.py` (`__version__`)
+2) Move release notes from `## [Unreleased]` into a new version section in `CHANGELOG.md`.
+3) Run validation:
+   - `pytest -q`
+4) Commit and tag with the same version string (example: `0.3.0-b1`).
+5) Push branch and tag:
+   - `git push`
+   - `git push origin 0.3.0-b1`

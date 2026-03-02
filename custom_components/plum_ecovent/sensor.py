@@ -40,9 +40,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import SENSORS
+    device_info = entry_data.get("device_info")
+    discovered = entry_data.get("definitions", {})
+    sensors = discovered.get("sensor", [])
+    if "sensor" not in discovered:
+        _LOGGER.warning("No discovered sensor definitions found for entry %s; no sensors will be created", entry.entry_id)
 
-    entities = [PlumEcoventSensor(manager, coordinator, entry, d, idx) for idx, d in enumerate(SENSORS)]
+    entities = [PlumEcoventSensor(manager, coordinator, entry, d, idx, device_info=device_info) for idx, d in enumerate(sensors)]
     async_add_entities(entities, True)
 
 
@@ -50,7 +54,7 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
     """Sensor reading a specific register defined in `registers.SENSORS`."""
 
     def __init__(
-        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, idx: int = 0
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, idx: int = 0, device_info=None
     ) -> None:
         super().__init__(coordinator)
         self._manager = manager
@@ -61,6 +65,12 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_sensor_{definition.address}_{name_slug}_{idx}"
         self._state = None
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
         if definition.device_class:
             self._attr_device_class = definition.device_class
         if definition.unit_of_measurement:
@@ -75,12 +85,7 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": self._entry.title,
-            "manufacturer": "Plum",
-            "model": "Ecovent",
-        }
+        return self._device_info
 
     @property
     def native_value(self):

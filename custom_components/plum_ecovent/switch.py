@@ -7,6 +7,7 @@ try:
     from homeassistant.components.switch import SwitchEntity
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.exceptions import HomeAssistantError
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
     from homeassistant.const import EntityCategory
@@ -24,6 +25,9 @@ except Exception:  # Running outside Home Assistant for tests
     class HomeAssistant:  # type: ignore
         pass
 
+    class HomeAssistantError(Exception):
+        pass
+
     from typing import Any as AddEntitiesCallback  # type: ignore
 
 from .const import DOMAIN
@@ -39,11 +43,15 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import SWITCHES
+    device_info = entry_data.get("device_info")
+    discovered = entry_data.get("definitions", {})
+    switches = discovered.get("switch", [])
+    if "switch" not in discovered:
+        _LOGGER.warning("No discovered switch definitions found for entry %s; no switches will be created", entry.entry_id)
 
     entities = []
-    for definition in SWITCHES:
-        entities.append(PlumEcoventSwitch(manager, coordinator, entry, definition))
+    for definition in switches:
+        entities.append(PlumEcoventSwitch(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 
 
@@ -51,7 +59,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
     """Switch representing a Modbus coil/bitmask."""
 
     def __init__(
-        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
     ) -> None:
         super().__init__(coordinator)
         self._manager = manager
@@ -62,6 +70,12 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_switch_{definition.address}_{name_slug}"
         self._attr_is_on = False
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
         if definition.entity_category is not None:
             try:
                 self._attr_entity_category = EntityCategory(definition.entity_category)
@@ -70,12 +84,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": self._entry.title,
-            "manufacturer": "Plum",
-            "model": "Ecovent",
-        }
+        return self._device_info
 
     async def async_update(self) -> None:
         if self.coordinator and self.coordinator.update_interval is None:
@@ -91,13 +100,29 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
             return False
         return bool(value & self._definition.bitmask)
 
+    async def _async_set_bit_state(self, turn_on: bool) -> bool:
+        current_register_value = 0
+        response = await self._manager.read_holding_registers(self._definition.address, 1)
+        if response is not None and hasattr(response, "registers") and response.registers:
+            current_register_value = int(response.registers[0])
+
+        if turn_on:
+            new_register_value = current_register_value | self._definition.bitmask
+        else:
+            new_register_value = current_register_value & ~self._definition.bitmask
+
+        success = await self._manager.write_register(self._definition.address, int(new_register_value))
+        if success and self.coordinator:
+            await self.coordinator.async_request_refresh()
+        return bool(success)
+
     async def async_turn_on(self, **kwargs) -> None:
-        await self._manager.write_register(
-            self._definition.address, self._definition.bitmask
-        )
-        self._attr_is_on = True
+        success = await self._async_set_bit_state(True)
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._manager.write_register(self._definition.address, 0)
-        self._attr_is_on = False
+        success = await self._async_set_bit_state(False)
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
 

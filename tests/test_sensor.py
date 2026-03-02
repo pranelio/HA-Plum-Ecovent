@@ -158,9 +158,11 @@ def test_other_entities():
         assert sw.is_on in (False, True)
 
         loop.run_until_complete(sw.async_turn_on())
-        assert manager.written[-1] == (sw._definition.address, 1)
+        expected_on = 42 | sw._definition.bitmask
+        assert manager.written[-1] == (sw._definition.address, expected_on)
         loop.run_until_complete(sw.async_turn_off())
-        assert manager.written[-1] == (sw._definition.address, 0)
+        expected_off = 42 & ~sw._definition.bitmask
+        assert manager.written[-1] == (sw._definition.address, expected_off)
 
         loop.run_until_complete(num.async_update())
         assert isinstance(num.native_value, (int, float))

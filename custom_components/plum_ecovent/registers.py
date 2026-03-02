@@ -27,12 +27,15 @@ class BinarySensorDef:
     * ``entity_category`` – category such as ``diagnostic`` or ``config``.
     * ``skip_updates`` – only refresh every Nth poll (used for slow-changing
       values).
+        * ``optional`` – set ``True`` when this register is model-dependent and
+            should be probed during discovery.
     """
     address: int
     name: str
     device_class: Optional[str] = None
     entity_category: Optional[str] = None
     skip_updates: Optional[int] = None
+    optional: bool = False
 
 
 BINARY_SENSORS: List[BinarySensorDef] = [
@@ -40,10 +43,10 @@ BINARY_SENSORS: List[BinarySensorDef] = [
     BinarySensorDef(217, "Heat Exchanger Regeneration", entity_category="diagnostic", skip_updates=5),
     BinarySensorDef(225, "Supply filter replacement needed", device_class="problem", entity_category="diagnostic", skip_updates=5),
     BinarySensorDef(228, "Extract filter replacement needed", device_class="problem", entity_category="diagnostic", skip_updates=5),
-    BinarySensorDef(238, "Secondary Heater Status", entity_category="diagnostic"),
-    BinarySensorDef(240, "Secondary Heater Overtemperature", device_class="problem", entity_category="diagnostic"),
-    BinarySensorDef(242, "Preheater Status", entity_category="diagnostic"),
-    BinarySensorDef(244, "Preheater Overtemperature", device_class="problem", entity_category="diagnostic"),
+    BinarySensorDef(238, "Secondary Heater Status", entity_category="diagnostic", optional=True),
+    BinarySensorDef(240, "Secondary Heater Overtemperature", device_class="problem", entity_category="diagnostic", optional=True),
+    BinarySensorDef(242, "Preheater Status", entity_category="diagnostic", optional=True),
+    BinarySensorDef(244, "Preheater Overtemperature", device_class="problem", entity_category="diagnostic", optional=True),
     BinarySensorDef(246, "Supply Fan Status", entity_category="diagnostic"),
     BinarySensorDef(248, "Extract Fan Status", entity_category="diagnostic"),
 ]
@@ -57,6 +60,8 @@ class NumberDef:
     * ``step``/``min_value``/``max_value``/``mode`` control the input widget.
     * ``unit_of_measurement`` and ``device_class`` describe the quantity.
     * ``entity_category`` allows ``config`` or ``diagnostic`` grouping.
+        * ``optional`` – set ``True`` when this register is model-dependent and
+            should be probed during discovery.
     """
     address: int
     name: str
@@ -68,6 +73,7 @@ class NumberDef:
     max_value: Optional[Any] = None
     mode: Optional[str] = None
     skip_updates: Optional[int] = None
+    optional: bool = False
 
 
 NUMBERS: List[NumberDef] = [
@@ -79,8 +85,8 @@ NUMBERS: List[NumberDef] = [
     NumberDef(76, "Exhaust Fan Speed G3", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
     NumberDef(79, "Auto Minimum Fan Speed", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=5),
     NumberDef(80, "Auto Maximum Fan Speed", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=5),
-    NumberDef(81, "Max CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", entity_category="config", step=1, min_value=0, max_value=2000, mode="BOX", skip_updates=20),
-    NumberDef(83, "Max Humidity", device_class="humidity", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=20),
+    NumberDef(81, "Max CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", entity_category="config", step=1, min_value=0, max_value=2000, mode="BOX", skip_updates=20, optional=True),
+    NumberDef(83, "Max Humidity", device_class="humidity", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=20, optional=True),
     NumberDef(93, "Comfort Temperature Day", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=8, max_value=30, mode="BOX", skip_updates=20),
     NumberDef(94, "Comfort Temperature Night", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=8, max_value=30, mode="BOX", skip_updates=20),
     NumberDef(103, "Winter Mode Activation Temperature", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=-20, max_value=20, mode="BOX", skip_updates=20),
@@ -98,7 +104,8 @@ class SensorDef:
 
     ``filters`` may be a list of conversion dicts applied to the raw value
     (e.g. ``{"multiply": 0.1}`` to divide by ten).  ``accuracy_decimals`` is
-    used by the sensor entity to format the value.
+    used by the sensor entity to format the value. ``optional`` marks
+    model-dependent entities to be probed during discovery.
     """
     address: int
     name: str
@@ -108,11 +115,12 @@ class SensorDef:
     entity_category: Optional[str] = None
     filters: Optional[List[Dict[str, Any]]] = None
     skip_updates: Optional[int] = None
+    optional: bool = False
 
 
 SENSORS: List[SensorDef] = [
-    SensorDef(82, "CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", accuracy_decimals=0, filters=[{"multiply": 0.1}]),
-    SensorDef(84, "Humidity", device_class="humidity", unit_of_measurement="%", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
+    SensorDef(82, "CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", accuracy_decimals=0, filters=[{"multiply": 0.1}], optional=True),
+    SensorDef(84, "Humidity", device_class="humidity", unit_of_measurement="%", accuracy_decimals=1, filters=[{"multiply": 0.1}], optional=True),
     SensorDef(201, "Comfort Temperature", device_class="temperature", unit_of_measurement="°C"),
     SensorDef(202, "Outdoor Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
     SensorDef(203, "Leading Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
@@ -121,7 +129,7 @@ SENSORS: List[SensorDef] = [
     SensorDef(208, "Supply Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
     SensorDef(207, "Exhaust Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
     SensorDef(211, "Control Panel Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(214, "Secondary Heater Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
+    SensorDef(214, "Secondary Heater Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}], optional=True),
     SensorDef(221, "Days of operation", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
     SensorDef(222, "Days to inspection", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
     SensorDef(223, "Days until device lock", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
@@ -129,12 +137,10 @@ SENSORS: List[SensorDef] = [
     SensorDef(231, "Supply Filter working days", device_class="duration", unit_of_measurement="d", entity_category="diagnostic", skip_updates=20),
     SensorDef(232, "Extract Filter Pollution", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], skip_updates=20),
     SensorDef(233, "Extract Filter working days", device_class="duration", unit_of_measurement="d", entity_category="diagnostic", skip_updates=20),
-    SensorDef(239, "Secondary Heater current control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}]),
-    SensorDef(243, "Preheater current control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}]),
+    SensorDef(239, "Secondary Heater current control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], optional=True),
+    SensorDef(243, "Preheater current control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], optional=True),
     SensorDef(247, "Supply Fan Speed", unit_of_measurement="%"),
     SensorDef(249, "Extract Fan Speed", unit_of_measurement="%"),
-    SensorDef(221, "Days of operation", device_class="duration", unit_of_measurement="d", entity_category="diagnostic", filters=None),
-    # additional sensors removed for brevity
 ]
 
 # switch definitions
@@ -143,17 +149,46 @@ class SwitchDef:
     """On/off register metadata.
 
     ``bitmask`` allows a single register to expose multiple boolean values.
+    ``optional`` marks model-dependent entities to be probed during
+    discovery.
     """
     address: int
     name: str
     bitmask: int = 1
     entity_category: Optional[str] = None
     skip_updates: Optional[int] = None
+    optional: bool = False
 
 
 SWITCHES: List[SwitchDef] = [
     SwitchDef(59, "On⁄Off"),
     SwitchDef(78, "Auto Mode"),
     SwitchDef(114, "Boost Mode"),
-    SwitchDef(144, "Secondary Heater", entity_category="config", skip_updates=5, bitmask=0x04),
+    SwitchDef(144, "Secondary Heater", entity_category="config", skip_updates=5, bitmask=0x04, optional=True),
 ]
+
+
+def optional_entity_id(platform: str, definition: Any) -> str:
+    """Return a stable identifier for an optional entity definition."""
+    name_slug = str(getattr(definition, "name", "unknown")).strip().lower().replace(" ", "_")
+    return f"{platform}:{int(getattr(definition, 'address', -1))}:{name_slug}"
+
+
+def optional_entity_catalog() -> dict[str, str]:
+    """Return selectable optional entities mapped by id -> user label."""
+    by_platform: dict[str, list[Any]] = {
+        "sensor": SENSORS,
+        "binary_sensor": BINARY_SENSORS,
+        "switch": SWITCHES,
+        "number": NUMBERS,
+    }
+
+    catalog: dict[str, str] = {}
+    for platform, definitions in by_platform.items():
+        for definition in definitions:
+            if not getattr(definition, "optional", False):
+                continue
+            entity_id = optional_entity_id(platform, definition)
+            catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
+
+    return catalog

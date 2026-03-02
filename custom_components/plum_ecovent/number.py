@@ -4,15 +4,21 @@ from __future__ import annotations
 import logging
 
 try:
-    from homeassistant.components.number import NumberEntity
+    from homeassistant.components.number import NumberEntity, NumberMode
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.exceptions import HomeAssistantError
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
     from homeassistant.const import EntityCategory
 except Exception:  # Running outside Home Assistant for tests
     class NumberEntity:  # type: ignore
         pass
+
+    class NumberMode:  # type: ignore
+        BOX = "box"
+        AUTO = "auto"
+        SLIDER = "slider"
 
     class CoordinatorEntity:  # type: ignore
         def __init__(self, coordinator=None):
@@ -22,6 +28,9 @@ except Exception:  # Running outside Home Assistant for tests
         pass
 
     class HomeAssistant:  # type: ignore
+        pass
+
+    class HomeAssistantError(Exception):
         pass
 
     from typing import Any as AddEntitiesCallback  # type: ignore
@@ -39,11 +48,15 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import NUMBERS
+    device_info = entry_data.get("device_info")
+    discovered = entry_data.get("definitions", {})
+    numbers = discovered.get("number", [])
+    if "number" not in discovered:
+        _LOGGER.warning("No discovered number definitions found for entry %s; no numbers will be created", entry.entry_id)
 
     entities = []
-    for definition in NUMBERS:
-        entities.append(PlumEcoventNumber(manager, coordinator, entry, definition))
+    for definition in numbers:
+        entities.append(PlumEcoventNumber(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 
 
@@ -51,7 +64,7 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
     """Number entity representing a register."""
 
     def __init__(
-        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition
+        self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
     ) -> None:
         super().__init__(coordinator)
         self._manager = manager
@@ -62,6 +75,12 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{name_slug}"
         self._attr_native_value = 0
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
         if definition.unit_of_measurement:
             self._attr_native_unit_of_measurement = definition.unit_of_measurement
         if definition.device_class:
@@ -77,22 +96,30 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
             self._attr_native_min_value = definition.min_value
         if definition.max_value is not None:
             self._attr_native_max_value = definition.max_value
+        if definition.mode is not None:
+            mode = definition.mode
+            if isinstance(mode, str):
+                mode = mode.lower()
+                if hasattr(NumberMode, "BOX") and mode == "box":
+                    mode = NumberMode.BOX
+                elif hasattr(NumberMode, "AUTO") and mode == "auto":
+                    mode = NumberMode.AUTO
+                elif hasattr(NumberMode, "SLIDER") and mode == "slider":
+                    mode = NumberMode.SLIDER
+            self._attr_mode = mode
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": self._entry.title,
-            "manufacturer": "Plum",
-            "model": "Ecovent",
-        }
+        return self._device_info
 
     async def async_update(self) -> None:
         if self.coordinator and self.coordinator.update_interval is None:
             await self.coordinator.async_request_refresh()
 
     async def async_set_native_value(self, value: float) -> None:
-        await self._manager.write_register(self._definition.address, int(value))
+        success = await self._manager.write_register(self._definition.address, int(value))
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
         self._attr_native_value = value
 
     @property
