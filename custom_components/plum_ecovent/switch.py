@@ -7,6 +7,7 @@ try:
     from homeassistant.components.switch import SwitchEntity
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.exceptions import HomeAssistantError
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
     from homeassistant.const import EntityCategory
@@ -22,6 +23,9 @@ except Exception:  # Running outside Home Assistant for tests
         pass
 
     class HomeAssistant:  # type: ignore
+        pass
+
+    class HomeAssistantError(Exception):
         pass
 
     from typing import Any as AddEntitiesCallback  # type: ignore
@@ -96,7 +100,7 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
             return False
         return bool(value & self._definition.bitmask)
 
-    async def _async_set_bit_state(self, turn_on: bool) -> None:
+    async def _async_set_bit_state(self, turn_on: bool) -> bool:
         current_register_value = 0
         response = await self._manager.read_holding_registers(self._definition.address, 1)
         if response is not None and hasattr(response, "registers") and response.registers:
@@ -110,12 +114,15 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
         success = await self._manager.write_register(self._definition.address, int(new_register_value))
         if success and self.coordinator:
             await self.coordinator.async_request_refresh()
+        return bool(success)
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._async_set_bit_state(True)
-        self._attr_is_on = True
+        success = await self._async_set_bit_state(True)
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._async_set_bit_state(False)
-        self._attr_is_on = False
+        success = await self._async_set_bit_state(False)
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
 

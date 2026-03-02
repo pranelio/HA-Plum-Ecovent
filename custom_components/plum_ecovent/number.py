@@ -7,6 +7,7 @@ try:
     from homeassistant.components.number import NumberEntity, NumberMode
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.exceptions import HomeAssistantError
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
     from homeassistant.const import EntityCategory
@@ -27,6 +28,9 @@ except Exception:  # Running outside Home Assistant for tests
         pass
 
     class HomeAssistant:  # type: ignore
+        pass
+
+    class HomeAssistantError(Exception):
         pass
 
     from typing import Any as AddEntitiesCallback  # type: ignore
@@ -113,7 +117,9 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
             await self.coordinator.async_request_refresh()
 
     async def async_set_native_value(self, value: float) -> None:
-        await self._manager.write_register(self._definition.address, int(value))
+        success = await self._manager.write_register(self._definition.address, int(value))
+        if not success:
+            raise HomeAssistantError(f"Failed to write register {self._definition.address}")
         self._attr_native_value = value
 
     @property

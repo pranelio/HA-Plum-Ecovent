@@ -3,11 +3,11 @@
 Current backlog for the integration.
 
 ## Required fixes (from quality audit)
-- [ ] Fix options flow registration so Home Assistant reliably exposes integration options (`ConfigFlow.async_get_options_flow`).
-- [ ] Make number writes fail-safe: only update optimistic value after successful Modbus write, and surface write failures.
-- [ ] Make switch command state fail-safe: do not set local on/off state when write fails; rely on coordinator refresh/result.
-- [ ] Harden setup compatibility for tests/stubs by safely merging config with missing `entry.options`.
-- [ ] Update tests to match current behavior:
+- [x] Fix options flow registration so Home Assistant reliably exposes integration options (`ConfigFlow.async_get_options_flow`).
+- [x] Make number writes fail-safe: only update optimistic value after successful Modbus write, and surface write failures.
+- [x] Make switch command state fail-safe: do not set local on/off state when write fails; rely on coordinator refresh/result.
+- [x] Harden setup compatibility for tests/stubs by safely merging config with missing `entry.options`.
+- [x] Update tests to match current behavior:
 	- config flow tests must mock reachability validation (`_async_test_connection`),
 	- switch tests must assert bitmask-preserving register writes (not forced `1/0`).
 
