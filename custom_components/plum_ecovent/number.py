@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 try:
-    from homeassistant.components.number import NumberEntity
+    from homeassistant.components.number import NumberEntity, NumberMode
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -13,6 +13,11 @@ try:
 except Exception:  # Running outside Home Assistant for tests
     class NumberEntity:  # type: ignore
         pass
+
+    class NumberMode:  # type: ignore
+        BOX = "box"
+        AUTO = "auto"
+        SLIDER = "slider"
 
     class CoordinatorEntity:  # type: ignore
         def __init__(self, coordinator=None):
@@ -39,10 +44,13 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import NUMBERS
+    discovered = entry_data.get("definitions", {})
+    numbers = discovered.get("number", [])
+    if "number" not in discovered:
+        _LOGGER.warning("No discovered number definitions found for entry %s; no numbers will be created", entry.entry_id)
 
     entities = []
-    for definition in NUMBERS:
+    for definition in numbers:
         entities.append(PlumEcoventNumber(manager, coordinator, entry, definition))
     async_add_entities(entities, True)
 
@@ -77,6 +85,17 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
             self._attr_native_min_value = definition.min_value
         if definition.max_value is not None:
             self._attr_native_max_value = definition.max_value
+        if definition.mode is not None:
+            mode = definition.mode
+            if isinstance(mode, str):
+                mode = mode.lower()
+                if hasattr(NumberMode, "BOX") and mode == "box":
+                    mode = NumberMode.BOX
+                elif hasattr(NumberMode, "AUTO") and mode == "auto":
+                    mode = NumberMode.AUTO
+                elif hasattr(NumberMode, "SLIDER") and mode == "slider":
+                    mode = NumberMode.SLIDER
+            self._attr_mode = mode
 
     @property
     def device_info(self):

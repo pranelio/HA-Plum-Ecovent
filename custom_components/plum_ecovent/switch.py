@@ -39,10 +39,13 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import SWITCHES
+    discovered = entry_data.get("definitions", {})
+    switches = discovered.get("switch", [])
+    if "switch" not in discovered:
+        _LOGGER.warning("No discovered switch definitions found for entry %s; no switches will be created", entry.entry_id)
 
     entities = []
-    for definition in SWITCHES:
+    for definition in switches:
         entities.append(PlumEcoventSwitch(manager, coordinator, entry, definition))
     async_add_entities(entities, True)
 
@@ -91,13 +94,26 @@ class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
             return False
         return bool(value & self._definition.bitmask)
 
+    async def _async_set_bit_state(self, turn_on: bool) -> None:
+        current_register_value = 0
+        response = await self._manager.read_holding_registers(self._definition.address, 1)
+        if response is not None and hasattr(response, "registers") and response.registers:
+            current_register_value = int(response.registers[0])
+
+        if turn_on:
+            new_register_value = current_register_value | self._definition.bitmask
+        else:
+            new_register_value = current_register_value & ~self._definition.bitmask
+
+        success = await self._manager.write_register(self._definition.address, int(new_register_value))
+        if success and self.coordinator:
+            await self.coordinator.async_request_refresh()
+
     async def async_turn_on(self, **kwargs) -> None:
-        await self._manager.write_register(
-            self._definition.address, self._definition.bitmask
-        )
+        await self._async_set_bit_state(True)
         self._attr_is_on = True
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._manager.write_register(self._definition.address, 0)
+        await self._async_set_bit_state(False)
         self._attr_is_on = False
 

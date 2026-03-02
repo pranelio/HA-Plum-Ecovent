@@ -4,6 +4,7 @@
   "version": "0.3.0-b1",
   "documentation": "https://github.com/pranelio/HA-Plum-Ecovent",
   "brand": "plum_ecomax",
+  "iot_class": "local_polling",
   "requirements": [
     "pymodbus>=2.5.2"
   ],

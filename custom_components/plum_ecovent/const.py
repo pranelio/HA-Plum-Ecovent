@@ -21,5 +21,9 @@ DEFAULT_UNIT = 1
 CONF_UPDATE_RATE = "update_rate"
 DEFAULT_UPDATE_RATE = 30
 
+# Optional entity override settings
+CONF_OPTIONAL_FORCE_ENABLE = "optional_force_enable"
+CONF_OPTIONAL_DISABLE = "optional_disable"
+
 # Integration version (keep in sync with manifest.json)
 __version__ = "0.3.0-b1"

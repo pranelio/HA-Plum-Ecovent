@@ -40,9 +40,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import SENSORS
+    discovered = entry_data.get("definitions", {})
+    sensors = discovered.get("sensor", [])
+    if "sensor" not in discovered:
+        _LOGGER.warning("No discovered sensor definitions found for entry %s; no sensors will be created", entry.entry_id)
 
-    entities = [PlumEcoventSensor(manager, coordinator, entry, d, idx) for idx, d in enumerate(SENSORS)]
+    entities = [PlumEcoventSensor(manager, coordinator, entry, d, idx) for idx, d in enumerate(sensors)]
     async_add_entities(entities, True)
 
 

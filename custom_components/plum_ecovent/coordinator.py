@@ -76,6 +76,8 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> Dict[str, Any]:
         results: Dict[str, Any] = dict(self.data or {})
         self._cycle += 1
+        successful_reads = 0
+        failed_reads = 0
         for definition in self._defs:
             key = self._key(definition)
             skip = getattr(definition, "skip_updates", None)
@@ -85,11 +87,23 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
             response = await self._manager.read_holding_registers(definition.address, 1)
             if response is None or not hasattr(response, "registers"):
                 results[key] = None
+                failed_reads += 1
                 continue
 
             raw = response.registers[0]
             value = self._apply_filters(raw, getattr(definition, "filters", None))
             results[key] = value
+            successful_reads += 1
+
+        if self._defs and successful_reads == 0:
+            raise UpdateFailed("All Modbus reads failed")
+
+        if failed_reads:
+            _LOGGER.warning(
+                "Coordinator update completed with partial failures: %s/%s reads failed",
+                failed_reads,
+                successful_reads + failed_reads,
+            )
         return results
 
 

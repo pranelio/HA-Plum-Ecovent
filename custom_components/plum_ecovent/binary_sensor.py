@@ -39,10 +39,13 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
-    from .registers import BINARY_SENSORS
+    discovered = entry_data.get("definitions", {})
+    binary_sensors = discovered.get("binary_sensor", [])
+    if "binary_sensor" not in discovered:
+        _LOGGER.warning("No discovered binary sensor definitions found for entry %s; no binary sensors will be created", entry.entry_id)
 
     entities = []
-    for definition in BINARY_SENSORS:
+    for definition in binary_sensors:
         entities.append(PlumEcoventBinarySensor(manager, coordinator, entry, definition))
     async_add_entities(entities, True)
 

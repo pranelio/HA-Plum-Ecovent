@@ -1,13 +1,59 @@
 {
   "title": "Plum Ecovent",
   "config": {
+    "abort": {
+      "already_configured": "This device is already configured"
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the device",
+      "connection_timeout": "Connection timed out. Verify host, port, and device network access",
+      "connection_refused": "Connection refused. Verify the Modbus TCP port and that the device is online",
+      "invalid_host": "Host name or IP address is invalid or cannot be resolved",
+      "invalid_port": "Port must be between 1 and 65535",
+      "invalid_unit": "Modbus Address must be between 1 and 247",
+      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds"
+    },
     "step": {
       "user": {
         "title": "Plum Ecovent setup",
-        "description": "Enter the TCP connection parameters for the Ecovent device."
+        "description": "Enter the TCP connection parameters for the Ecovent device.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit": "Modbus Address",
+          "update_rate": "Update interval (seconds)",
+          "name": "Name"
+        }
       },
       "modbus_tcp": {
         "title": "Modbus TCP settings"
-      }    }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "cannot_connect": "Cannot connect to the device",
+      "connection_timeout": "Connection timed out. Verify host, port, and device network access",
+      "connection_refused": "Connection refused. Verify the Modbus TCP port and that the device is online",
+      "invalid_host": "Host name or IP address is invalid or cannot be resolved",
+      "invalid_port": "Port must be between 1 and 65535",
+      "invalid_unit": "Modbus Address must be between 1 and 247",
+      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
+      "overlapping_optional_overrides": "An optional entity cannot be both force-enabled and disabled"
+    },
+    "step": {
+      "init": {
+        "title": "Plum Ecovent options",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Name",
+          "update_rate": "Update interval (seconds)",
+          "unit": "Modbus Address",
+          "optional_force_enable": "Optional entities to enable",
+          "optional_disable": "Optional entities to disable"
+        }
+      }
+    }
   }
 }
