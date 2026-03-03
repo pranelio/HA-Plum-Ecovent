@@ -75,8 +75,9 @@ async def test_tcp_flow(monkeypatch):
     assert result3["type"] == "progress_done"
 
     result4 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
-    assert result4["type"] in ("progress", "create_entry")
-    result5 = result4 if result4["type"] == "create_entry" else await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result4["type"] == "progress_done"
+
+    result5 = await flow.async_step_probe_registers_result()
     assert result5["type"] == "create_entry"
     assert result5["title"] == "My"
     assert result5["data"][CONF_HOST] == "1.2.3.4"
@@ -127,9 +128,12 @@ async def test_tcp_flow_verify_adapter_connection_error(monkeypatch):
     assert result["type"] == "progress"
 
     result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
-    assert result2["type"] == "form"
-    assert result2["step_id"] == "verify_adapter"
-    assert result2["errors"]["base"] == "connection_refused"
+    assert result2["type"] == "progress_done"
+
+    result3 = await flow.async_step_verify_adapter_result()
+    assert result3["type"] == "form"
+    assert result3["step_id"] == "verify_adapter"
+    assert result3["errors"]["base"] == "connection_refused"
 
 
 @pytest.mark.asyncio
@@ -161,9 +165,12 @@ async def test_tcp_flow_verify_adapter_other_connection_errors(monkeypatch, erro
     assert result["type"] == "progress"
 
     result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
-    assert result2["type"] == "form"
-    assert result2["step_id"] == "verify_adapter"
-    assert result2["errors"]["base"] == error_code
+    assert result2["type"] == "progress_done"
+
+    result3 = await flow.async_step_verify_adapter_result()
+    assert result3["type"] == "form"
+    assert result3["step_id"] == "verify_adapter"
+    assert result3["errors"]["base"] == error_code
 
 
 @pytest.mark.asyncio
@@ -201,9 +208,9 @@ async def test_tcp_flow_probe_failed(monkeypatch):
     assert result2["type"] == "progress_done"
 
     result3 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
-    assert result3["type"] in ("progress", "form")
+    assert result3["type"] == "progress_done"
 
-    result4 = result3 if result3["type"] == "form" else await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    result4 = await flow.async_step_probe_registers_result()
     assert result4["type"] == "form"
     assert result4["step_id"] == "probe_registers"
     assert result4["errors"]["base"] == "probe_failed"
