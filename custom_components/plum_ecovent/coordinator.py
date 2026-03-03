@@ -66,6 +66,17 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
         for item in filters:
             if not isinstance(item, dict):
                 continue
+            if "signed" in item:
+                bits = item["signed"]
+                if bits == 16:
+                    try:
+                        val = int(filtered)
+                        if val >= 0x8000:
+                            filtered = val - 0x10000
+                        else:
+                            filtered = val
+                    except Exception:
+                        continue
             if "multiply" in item:
                 try:
                     filtered = filtered * item["multiply"]
@@ -91,6 +102,12 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
                 continue
 
             raw = response.registers[0]
+            if getattr(definition, "device_class", None) == "temperature":
+                try:
+                    if int(raw) >= 0x8000:
+                        raw = int(raw) - 0x10000
+                except Exception:
+                    pass
             value = self._apply_filters(raw, getattr(definition, "filters", None))
             results[key] = value
             successful_reads += 1
