@@ -13,14 +13,14 @@ Current backlog for the integration.
 
 ## Home Assistant quality scale roadmap (self-assessed)
 
-Current estimate: **Custom / pre-Bronze** (close to Bronze, but key Bronze rules still missing).
+Current estimate: **Bronze reached (self-assessed)**.
 
-### Bronze milestone (not reached)
-- [ ] Add `custom_components/plum_ecovent/quality_scale.yaml` and track each rule + exemptions.
-- [ ] Migrate runtime storage from `hass.data[DOMAIN][entry_id]` to `ConfigEntry.runtime_data`.
-- [ ] Set `has_entity_name = True` consistently for all entity platforms.
-- [ ] Ensure config-flow field help text uses `data_description` style context where applicable.
-- [ ] Keep config-flow coverage comprehensive for all happy/failure paths and uniqueness checks.
+### Bronze milestone (reached)
+- [x] Add `custom_components/plum_ecovent/quality_scale.yaml` and track each rule + exemptions.
+- [x] Migrate runtime storage from `hass.data[DOMAIN][entry_id]` to `ConfigEntry.runtime_data`.
+- [x] Set `has_entity_name = True` consistently for all entity platforms.
+- [x] Ensure config-flow field help text uses `data_description` style context where applicable.
+- [x] Keep config-flow coverage comprehensive for all happy/failure paths and uniqueness checks.
 
 ### Silver milestone (not reached)
 - [ ] Increase measured overall integration coverage to >95% and keep it enforced in CI.
@@ -35,6 +35,7 @@ Current estimate: **Custom / pre-Bronze** (close to Bronze, but key Bronze rules
 - [ ] Add reconfigure flow and repair issue guidance where user intervention is required.
 - [ ] Expand end-user docs: supported functions/entities matrix, update behavior details, use-cases, automation examples.
 - [ ] Evaluate device discovery feasibility (DHCP/zeroconf/manual import) and document exemptions if not technically possible.
+- [ ] Create an ESPHome device blueprint/example that can expose zeroconf discovery and connection-state presence to simplify integration setup.
 
 ### Platinum milestone (not reached)
 - [ ] Move toward strict typing across integration modules and tests (mypy strict target).

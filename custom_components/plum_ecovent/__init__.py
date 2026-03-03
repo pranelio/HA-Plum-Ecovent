@@ -87,13 +87,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await manager.async_close()
         return False
 
-    hass.data[DOMAIN][entry.entry_id] = {
+    runtime_data = {
         "manager": manager,
         "coordinator": coordinator,
         "definitions": discovered_definitions,
         "discovered_entities": discovered_entities,
         "device_info": _build_device_info(entry, config),
     }
+    entry.runtime_data = runtime_data
+    hass.data[DOMAIN][entry.entry_id] = runtime_data
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
@@ -126,13 +128,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    entry_data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    entry_data = getattr(entry, "runtime_data", None) or hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if entry_data:
         manager: ModbusClientManager | None = entry_data.get("manager")
         if manager:
             await manager.async_close()
 
-    if not hass.data.get(DOMAIN) and hass.services.has_service(DOMAIN, "set_device_setting"):
+    with_logging_map = hass.data.get(DOMAIN, {})
+    if isinstance(with_logging_map, dict):
+        with_logging_map.pop(entry.entry_id, None)
+
+    if not _loaded_runtime_entries(hass) and hass.services.has_service(DOMAIN, "set_device_setting"):
         hass.services.async_remove(DOMAIN, "set_device_setting")
 
     return unload_ok
@@ -163,15 +169,15 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         if max_value is not None and value > int(max_value):
             raise ValueError(f"Value above maximum {max_value}")
 
-        entries = list(hass.data.get(DOMAIN, {}).items())
+        entries = _loaded_runtime_entries(hass)
         if entry_id:
-            selected = hass.data.get(DOMAIN, {}).get(entry_id)
+            selected = entries.get(entry_id)
             if selected is None:
                 raise ValueError(f"Entry not loaded: {entry_id}")
         else:
             if len(entries) != 1:
                 raise ValueError("Provide entry_id when multiple Plum Ecovent entries are loaded")
-            selected = entries[0][1]
+            selected = next(iter(entries.values()))
 
         manager: ModbusClientManager | None = selected.get("manager")
         coordinator: PlumEcoventCoordinator | None = selected.get("coordinator")
@@ -197,6 +203,35 @@ async def _async_register_services(hass: HomeAssistant) -> None:
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _loaded_runtime_entries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
+    """Return loaded Plum runtime payloads indexed by entry_id.
+
+    Prefer ConfigEntry.runtime_data, with legacy fallback to hass.data storage.
+    """
+    loaded: dict[str, dict[str, Any]] = {}
+
+    config_entries = getattr(hass, "config_entries", None)
+    async_entries = getattr(config_entries, "async_entries", None)
+    if callable(async_entries):
+        try:
+            for entry in async_entries(DOMAIN):
+                runtime_data = getattr(entry, "runtime_data", None)
+                if isinstance(runtime_data, dict):
+                    loaded[entry.entry_id] = runtime_data
+        except Exception:
+            _LOGGER.debug("Unable to iterate config entries for runtime data", exc_info=True)
+
+    if loaded:
+        return loaded
+
+    fallback = hass.data.get(DOMAIN, {})
+    if isinstance(fallback, dict):
+        for entry_id, payload in fallback.items():
+            if isinstance(payload, dict):
+                loaded[str(entry_id)] = payload
+    return loaded
 
 
 async def _async_discover_definitions(

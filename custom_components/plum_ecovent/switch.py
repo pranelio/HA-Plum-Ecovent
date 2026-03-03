@@ -40,7 +40,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    entry_data = hass.data[DOMAIN][entry.entry_id]
+    entry_data = getattr(entry, "runtime_data", None)
+    if not isinstance(entry_data, dict):
+        entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
     device_info = entry_data.get("device_info")
@@ -57,6 +59,8 @@ async def async_setup_entry(
 
 class PlumEcoventSwitch(CoordinatorEntity, SwitchEntity):
     """Switch representing a Modbus coil/bitmask."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None

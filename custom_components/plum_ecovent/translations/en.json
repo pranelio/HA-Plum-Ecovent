@@ -24,6 +24,13 @@
           "unit": "Modbus Address",
           "update_rate": "Update interval (seconds)",
           "name": "Name"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Modbus TCP gateway.",
+          "port": "TCP port exposed by the gateway (default 502).",
+          "unit": "Modbus slave address of the ventilation controller.",
+          "update_rate": "Polling interval in seconds.",
+          "name": "Display name for the Home Assistant device."
         }
       },
       "verify_adapter": {
@@ -54,9 +61,9 @@
         "description": "Choose what you want to change.",
         "data": {
           "options_action": "Action",
-          "connection": "Modify connection and update settings",
-          "entities": "Modify scanned entities",
-          "device_settings": "Device Settings"
+          "connection": "Connection and update settings",
+          "entities": "Entity reporting",
+          "device_settings": "Device settings"
         }
       },
       "connection": {

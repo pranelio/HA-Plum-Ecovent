@@ -40,6 +40,20 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 - Automations can react to entity state or call services to write registers via the switch/number entities.  
 - Availability reflects Modbus read/write health; connection issues log warnings.
 
+### Service actions
+- `plum_ecovent.set_device_setting`: writes options-managed settings directly by key.
+
+Example automation action:
+```yaml
+action:
+   - service: plum_ecovent.set_device_setting
+      data:
+         setting: boost_duration
+         value: 15
+```
+
+If multiple Plum entries are loaded, include `entry_id` in the service data.
+
 ## Requirements
 - Home Assistant Core / OS / Supervised with network access to the Ecovent.  
 - Modbus RTU-to-TCP adapter (gateway) for units that expose only RS485/RTU locally.
@@ -50,6 +64,12 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 - Connection errors: verify IP/port, unit ID, and firewall; increase `update_rate` if the bus is saturated.  
 - Signature/type errors: integration already falls back across pymodbus signatures; update to latest release if you still see them.
 - Unique ID migration (post-update): if entities remain ignored due to old IDs, remove the Plum Ecovent integration and re-add it, or delete the affected entries from **Settings → Devices & Services → Entities** (show disabled/hidden), then reload. The integration now appends an index to unique IDs to avoid collisions.
+
+## Removal
+1) Go to **Settings → Devices & Services**.
+2) Open **Plum Ecovent** and choose **Delete**.
+3) Confirm removal; entities and device entries from this integration are removed.
+4) Optionally delete `custom_components/plum_ecovent/` if you installed manually.
 
 ## Disclaimer
 - You are responsible for safe installation, wiring, configuration, and operation of your ventilation system and any connected adapters/gateways.
