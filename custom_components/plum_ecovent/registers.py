@@ -119,8 +119,8 @@ class SensorDef:
 
 
 SENSORS: List[SensorDef] = [
-    SensorDef(82, "CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", accuracy_decimals=0, filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(84, "Humidity", device_class="humidity", unit_of_measurement="%", accuracy_decimals=1, filters=[{"multiply": 0.1}], optional=True),
+    SensorDef(82, "CO2", device_class="carbon_dioxide", unit_of_measurement="ppm", accuracy_decimals=0, filters=[{"signed": 16}, {"multiply": 0.1}], optional=True),
+    SensorDef(84, "Humidity", device_class="humidity", unit_of_measurement="%", accuracy_decimals=1, filters=[{"signed": 16}, {"multiply": 0.1}], optional=True),
     SensorDef(201, "Comfort Temperature", device_class="temperature", unit_of_measurement="°C"),
     SensorDef(202, "Outdoor Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
     SensorDef(203, "Leading Temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),

@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 ### Changed
 - Iteration version bump to `0.3.2` for development branch updates.
 
+## [0.3.1] - 2026-03-03
+### Changed
+- Bumped integration version to `0.3.1` in `manifest.json` and `const.py`.
+
+### Fixed
+- Corrected negative temperature decoding by treating Modbus temperature-class registers as signed 16-bit values before scaling.
+- Eliminated invalid large positive readings like `6552.9°C` for actual negative temperatures (for example `-0.8°C`).
+
 ## [0.3.0-b1] - 2026-03-02
 ### Added
 - Diagnostics support via `diagnostics.py` for safer support troubleshooting.
