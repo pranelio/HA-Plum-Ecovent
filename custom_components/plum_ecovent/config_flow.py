@@ -140,7 +140,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_probe_and_fetch_identity(self) -> tuple[list[int], dict[str, str]]:
         """Run long probe/identity operations in a tracked task for progress UI."""
-        responding = await _async_probe_responding_registers(self.hass, self._data, retries=2)
+        responding = await _async_probe_responding_registers(self.hass, self._data, retries=1)
         identity: dict[str, str] = {}
         if responding:
             identity = await _async_fetch_device_identity(self.hass, self._data)
@@ -414,6 +414,9 @@ async def async_get_options_flow(entry: config_entries.ConfigEntry):
 async def _async_probe_responding_registers(hass, config: dict, retries: int = 2) -> list[int]:
     """Probe all defined register addresses and return those that respond."""
     manager = ModbusClientManager(hass, config)
+    manager.retries = 0
+    manager.backoff = 0.05
+    manager.timeout = 1.5
     connected = await manager.async_connect()
     if not connected:
         return []
@@ -424,7 +427,9 @@ async def _async_probe_responding_registers(hass, config: dict, retries: int = 2
         for address in addresses:
             success = False
             for _ in range(retries + 1):
-                response = await manager.read_holding_registers(address, 1)
+                response = await manager.read_holding_registers(address, 1, return_error_response=True)
+                if _is_illegal_data_response(response):
+                    break
                 if response is not None and hasattr(response, "registers"):
                     success = True
                     break
@@ -442,6 +447,25 @@ def _all_defined_addresses() -> list[int]:
     for definition in [*registers.SENSORS, *registers.BINARY_SENSORS, *registers.SWITCHES, *registers.NUMBERS]:
         addresses.add(int(definition.address))
     return sorted(addresses)
+
+
+def _is_illegal_data_response(response: Any) -> bool:
+    """Return True when Modbus replied with illegal address/value style exception."""
+    if response is None:
+        return False
+    is_error = getattr(response, "isError", None)
+    try:
+        if callable(is_error) and not is_error():
+            return False
+    except Exception:
+        return False
+
+    exception_code = getattr(response, "exception_code", None)
+    if exception_code in (2, 3):
+        return True
+
+    message = str(response).lower()
+    return "illegal" in message and ("address" in message or "data" in message or "value" in message)
 
 
 async def _async_fetch_device_identity(hass, config: dict) -> dict[str, str]:

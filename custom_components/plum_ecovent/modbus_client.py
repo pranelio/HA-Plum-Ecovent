@@ -175,7 +175,11 @@ class ModbusClientManager:
                 self._client = None
 
     async def read_holding_registers(
-        self, address: int, count: int, unit: int | None = None
+        self,
+        address: int,
+        count: int,
+        unit: int | None = None,
+        return_error_response: bool = False,
     ) -> Any:
         """Read holding registers — returns pymodbus result or None."""
         if not await self.async_ensure_connected():
@@ -238,6 +242,8 @@ class ModbusClientManager:
             # some pymodbus results expose isError()
             if result is not None and hasattr(result, "isError") and callable(result.isError):
                 if result.isError():
+                    if return_error_response:
+                        return result
                     _LOGGER.error("Modbus read returned error response for address %s", address)
                     return None
             return result

@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.2] - 2026-03-03
+### Fixed
+- Setup register probing now treats Modbus illegal-data/illegal-address exception responses as unsupported immediately, instead of repeatedly retrying those registers.
+- Setup probing now treats timeout/no-response registers as non-working after bounded attempts and continues quickly.
+- Removed retry amplification during setup probing by disabling nested client retries for probe requests.
+- Reduced probe latency by using probe-specific timeout/backoff values, so setup completes faster on slow or partially supported devices.
+
+### Changed
+- Updated integration version references to `0.4.2` in `manifest.json` and `const.py`.
+
 ## [0.4.1] - 2026-03-03
 ### Changed
 - Updated integration version references to `0.4.1` in `manifest.json` and `const.py`.
