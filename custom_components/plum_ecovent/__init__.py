@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,7 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_DEVICE_SETTINGS_VALUES,
     CONF_DEVICE_SERIAL,
     CONF_DEVICE_NAME,
     CONF_FIRMWARE_VERSION,
@@ -34,6 +36,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
+    await _async_register_services(hass)
     _LOGGER.debug("Plum Ecovent async_setup finished")
     return True
 
@@ -128,7 +131,67 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if manager:
             await manager.async_close()
 
+    if not hass.data.get(DOMAIN) and hass.services.has_service(DOMAIN, "set_device_setting"):
+        hass.services.async_remove(DOMAIN, "set_device_setting")
+
     return unload_ok
+
+
+async def _async_register_services(hass: HomeAssistant) -> None:
+    if hass.services.has_service(DOMAIN, "set_device_setting"):
+        return
+
+    from .registers import device_setting_catalog
+
+    catalog = device_setting_catalog()
+
+    async def _async_set_device_setting(call):
+        entry_id = call.data.get("entry_id")
+        setting = call.data["setting"]
+        value = int(call.data["value"])
+
+        setting_meta = catalog.get(setting)
+        if setting_meta is None:
+            raise ValueError(f"Unknown setting key: {setting}")
+
+        address = int(setting_meta["address"])
+        min_value = setting_meta.get("min")
+        max_value = setting_meta.get("max")
+        if min_value is not None and value < int(min_value):
+            raise ValueError(f"Value below minimum {min_value}")
+        if max_value is not None and value > int(max_value):
+            raise ValueError(f"Value above maximum {max_value}")
+
+        entries = list(hass.data.get(DOMAIN, {}).items())
+        if entry_id:
+            selected = hass.data.get(DOMAIN, {}).get(entry_id)
+            if selected is None:
+                raise ValueError(f"Entry not loaded: {entry_id}")
+        else:
+            if len(entries) != 1:
+                raise ValueError("Provide entry_id when multiple Plum Ecovent entries are loaded")
+            selected = entries[0][1]
+
+        manager: ModbusClientManager | None = selected.get("manager")
+        coordinator: PlumEcoventCoordinator | None = selected.get("coordinator")
+        if manager is None:
+            raise ValueError("Modbus manager is not available")
+
+        success = await manager.write_register(address, value)
+        if not success:
+            raise ValueError(f"Failed to write register {address}")
+
+        if coordinator is not None:
+            await coordinator.async_request_refresh()
+
+    service_schema = vol.Schema(
+        {
+            vol.Optional("entry_id"): str,
+            vol.Required("setting"): vol.In({key: value["name"] for key, value in catalog.items()}),
+            vol.Required("value"): vol.Coerce(int),
+        }
+    )
+    hass.services.async_register(DOMAIN, "set_device_setting", _async_set_device_setting, schema=service_schema)
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

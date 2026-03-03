@@ -39,19 +39,68 @@
       "invalid_port": "Port must be between 1 and 65535",
       "invalid_unit": "Modbus Address must be between 1 and 247",
       "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
+      "invalid_device_setting": "One or more values are outside allowed ranges",
       "overlapping_optional_overrides": "An optional entity cannot be both force-enabled and disabled"
     },
     "step": {
       "init": {
         "title": "Plum Ecovent options",
+        "description": "Choose what you want to change.",
+        "data": {
+          "options_action": "Change area",
+          "connection": "Modify connection and update settings",
+          "entities": "Modify scanned optional entities",
+          "device_settings": "Device Settings"
+        }
+      },
+      "connection": {
+        "title": "Connection and update settings",
         "data": {
           "host": "Host",
           "port": "Port",
           "name": "Name",
           "update_rate": "Update interval (seconds)",
-          "unit": "Modbus Address",
+          "unit": "Modbus Address"
+        }
+      },
+      "entities": {
+        "title": "Optional entity reporting",
+        "description": "Choose optional entities to always report, or force as unavailable by disabling them.",
+        "data": {
           "optional_force_enable": "Optional entities to enable",
           "optional_disable": "Optional entities to disable"
+        }
+      },
+      "device_settings": {
+        "title": "Device Settings",
+        "description": "Select a settings section.",
+        "data": {
+          "device_settings_group": "Settings section",
+          "supply_fan": "Supply fan speeds",
+          "exhaust_fan": "Exhaust fan speeds",
+          "auto_control": "Auto control",
+          "boost": "Boost settings",
+          "temperature": "Temperature settings"
+        }
+      },
+      "device_settings_group": {
+        "title": "Device Settings: {group_name}",
+        "data": {
+          "supply_fan_speed_g1": "Supply Fan Speed G1",
+          "supply_fan_speed_g2": "Supply Fan Speed G2",
+          "supply_fan_speed_g3": "Supply Fan Speed G3",
+          "exhaust_fan_speed_g1": "Exhaust Fan Speed G1",
+          "exhaust_fan_speed_g2": "Exhaust Fan Speed G2",
+          "exhaust_fan_speed_g3": "Exhaust Fan Speed G3",
+          "auto_minimum_fan_speed": "Auto Minimum Fan Speed",
+          "auto_maximum_fan_speed": "Auto Maximum Fan Speed",
+          "boost_supply_speed": "Boost Supply Speed",
+          "boost_extract_speed": "Boost Extract Speed",
+          "boost_duration": "Boost Duration",
+          "comfort_temperature_day": "Comfort Temperature Day",
+          "comfort_temperature_night": "Comfort Temperature Night",
+          "winter_mode_activation_temperature": "Winter Mode Activation Temperature",
+          "summer_mode_activation_temperature": "Summer Mode Activation Temperature"
         }
       }
     }

@@ -24,6 +24,9 @@ DEFAULT_UPDATE_RATE = 30
 # Optional entity override settings
 CONF_OPTIONAL_FORCE_ENABLE = "optional_force_enable"
 CONF_OPTIONAL_DISABLE = "optional_disable"
+CONF_OPTIONS_ACTION = "options_action"
+CONF_DEVICE_SETTINGS_VALUES = "device_settings_values"
+CONF_DEVICE_SETTINGS_GROUP = "device_settings_group"
 
 # Device identity metadata (fetched once via Modbus)
 CONF_DEVICE_SERIAL = "device_serial"
@@ -33,4 +36,4 @@ CONF_DEVICE_INFO_PENDING_FETCH = "device_info_pending_fetch"
 CONF_DEVICE_INFO_FETCH_ATTEMPTED = "device_info_fetch_attempted"
 
 # Integration version (keep in sync with manifest.json)
-__version__ = "0.3.0-b1"
+__version__ = "0.4.0"

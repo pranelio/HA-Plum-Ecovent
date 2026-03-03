@@ -7,7 +7,14 @@ from homeassistant import config_entries
 import pytest
 
 from custom_components.plum_ecovent.config_flow import ConfigFlow
-from custom_components.plum_ecovent.const import CONF_HOST, CONF_PORT, CONF_UNIT, CONF_UPDATE_RATE
+from custom_components.plum_ecovent.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_UNIT,
+    CONF_UPDATE_RATE,
+    CONF_OPTIONAL_FORCE_ENABLE,
+    CONF_OPTIONAL_DISABLE,
+)
 from homeassistant.const import CONF_NAME
 
 
@@ -138,3 +145,106 @@ async def test_async_setup_entry_creates_device(monkeypatch):
     # ensure our dummy registry was used and received identifiers
     assert registry.created, "device registry not invoked"
     assert registry.created[0]["identifiers"] == {(DOMAIN, entry.entry_id)}
+
+
+@pytest.mark.asyncio
+async def test_options_flow_branching_connection(monkeypatch):
+    """Options flow should route to connection step and validate values."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _ok_connection(host, port, timeout=5.0):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
+
+    entry = SimpleNamespace(
+        data={
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        },
+        options={},
+    )
+    flow = OptionsFlowHandler(entry)
+
+    init_result = await flow.async_step_init()
+    assert init_result["type"] == "form"
+    assert init_result["step_id"] == "init"
+
+    route_result = await flow.async_step_init({"options_action": "connection"})
+    assert route_result["type"] == "form"
+    assert route_result["step_id"] == "connection"
+
+    invalid = await flow.async_step_connection(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 70000,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        }
+    )
+    assert invalid["type"] == "form"
+    assert invalid["errors"][CONF_PORT] == "invalid_port"
+
+    valid = await flow.async_step_connection(
+        {
+            CONF_HOST: "10.0.0.2",
+            CONF_PORT: 502,
+            CONF_UNIT: 7,
+            CONF_UPDATE_RATE: 20,
+            CONF_NAME: "New Name",
+        }
+    )
+    assert valid["type"] == "create_entry"
+    assert valid["data"][CONF_HOST] == "10.0.0.2"
+    assert valid["data"][CONF_UNIT] == 7
+    assert valid["data"][CONF_NAME] == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_branching_entities(monkeypatch):
+    """Options flow should route to entities step and reject overlap."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+    import custom_components.plum_ecovent.config_flow as cf
+
+    monkeypatch.setattr(cf.OptionsFlowHandler, "_optional_choices", lambda self: {"sensor:82:co2": "sensor · CO2 (82)"})
+
+    entry = SimpleNamespace(
+        data={
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        },
+        options={},
+    )
+    flow = OptionsFlowHandler(entry)
+
+    route_result = await flow.async_step_init({"options_action": "entities"})
+    assert route_result["type"] == "form"
+    assert route_result["step_id"] == "entities"
+
+    overlap = await flow.async_step_entities(
+        {
+            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:82:co2"],
+            CONF_OPTIONAL_DISABLE: ["sensor:82:co2"],
+        }
+    )
+    assert overlap["type"] == "form"
+    assert overlap["errors"]["base"] == "overlapping_optional_overrides"
+
+    valid = await flow.async_step_entities(
+        {
+            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:82:co2"],
+            CONF_OPTIONAL_DISABLE: [],
+        }
+    )
+    assert valid["type"] == "create_entry"
+    assert valid["data"][CONF_OPTIONAL_FORCE_ENABLE] == ["sensor:82:co2"]

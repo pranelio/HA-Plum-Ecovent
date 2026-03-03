@@ -24,6 +24,9 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_OPTIONS_ACTION,
+    CONF_DEVICE_SETTINGS_VALUES,
+    CONF_DEVICE_SETTINGS_GROUP,
     CONF_DEVICE_SERIAL,
     CONF_DEVICE_NAME,
     CONF_FIRMWARE_VERSION,
@@ -113,8 +116,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
+        self._device_settings_group: str | None = None
 
     async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            action = user_input.get(CONF_OPTIONS_ACTION)
+            if action == "connection":
+                return await self.async_step_connection()
+            if action == "entities":
+                return await self.async_step_entities()
+            if action == "device_settings":
+                return await self.async_step_device_settings()
+
+        return self.async_show_form(step_id="init", data_schema=self._menu_schema())
+
+    async def async_step_connection(self, user_input=None):
         if user_input is not None:
             errors: dict[str, str] = {}
 
@@ -129,18 +145,51 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if port is None or not (1 <= port <= 65535):
                 errors[CONF_PORT] = "invalid_port"
 
-            forced = set(user_input.get(CONF_OPTIONAL_FORCE_ENABLE, []))
-            disabled = set(user_input.get(CONF_OPTIONAL_DISABLE, []))
-            if forced & disabled:
-                errors["base"] = "overlapping_optional_overrides"
-
             if not errors and host and port is not None:
                 connection_error = await _async_test_connection(host, int(port))
                 if connection_error is not None:
                     errors["base"] = connection_error
 
             if errors:
-                return self.async_show_form(step_id="init", data_schema=self._schema(user_input), errors=errors)
+                return self.async_show_form(
+                    step_id="connection",
+                    data_schema=self._connection_schema(user_input),
+                    errors=errors,
+                )
+
+            merged = self._current()
+            merged.update(
+                {
+                    CONF_HOST: host,
+                    CONF_PORT: int(port),
+                    CONF_NAME: user_input.get(CONF_NAME, "Plum Ecovent"),
+                    CONF_UPDATE_RATE: int(rate),
+                    CONF_UNIT: int(unit),
+                }
+            )
+            return self.async_create_entry(title="Options", data=merged)
+
+        current = self._current()
+        return self.async_show_form(
+            step_id="connection",
+            data_schema=self._connection_schema(current),
+        )
+
+    async def async_step_entities(self, user_input=None):
+        if user_input is not None:
+            errors: dict[str, str] = {}
+
+            forced = set(user_input.get(CONF_OPTIONAL_FORCE_ENABLE, []))
+            disabled = set(user_input.get(CONF_OPTIONAL_DISABLE, []))
+            if forced & disabled:
+                errors["base"] = "overlapping_optional_overrides"
+
+            if errors:
+                return self.async_show_form(
+                    step_id="entities",
+                    data_schema=self._entities_schema(user_input),
+                    errors=errors,
+                )
 
             choices = self._optional_choices()
             unknown_forced = [
@@ -154,24 +203,160 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 if value not in choices
             ]
 
-            user_input[CONF_OPTIONAL_FORCE_ENABLE] = sorted(
+            merged = self._current()
+            merged[CONF_OPTIONAL_FORCE_ENABLE] = sorted(
                 set(user_input.get(CONF_OPTIONAL_FORCE_ENABLE, [])) | set(unknown_forced)
             )
-            user_input[CONF_OPTIONAL_DISABLE] = sorted(
+            merged[CONF_OPTIONAL_DISABLE] = sorted(
                 set(user_input.get(CONF_OPTIONAL_DISABLE, [])) | set(unknown_disabled)
             )
 
-            return self.async_create_entry(title="Options", data=user_input)
+            return self.async_create_entry(title="Options", data=merged)
 
-        current = {**self._entry.data, **self._entry.options}
-        return self.async_show_form(step_id="init", data_schema=self._schema(current))
+        current = self._current()
+        return self.async_show_form(
+            step_id="entities",
+            data_schema=self._entities_schema(current),
+        )
+
+    async def async_step_device_settings(self, user_input=None):
+        if user_input is not None:
+            group_id = user_input.get(CONF_DEVICE_SETTINGS_GROUP)
+            if group_id:
+                return await self.async_step_device_settings_group({CONF_DEVICE_SETTINGS_GROUP: group_id})
+
+        return self.async_show_form(
+            step_id="device_settings",
+            data_schema=self._device_settings_menu_schema(),
+        )
+
+    async def async_step_device_settings_group(self, user_input=None):
+        groups = self._device_setting_groups()
+
+        if user_input is not None and CONF_DEVICE_SETTINGS_GROUP in user_input:
+            group_id = user_input[CONF_DEVICE_SETTINGS_GROUP]
+            self._device_settings_group = group_id
+            return self.async_show_form(
+                step_id="device_settings_group",
+                data_schema=self._device_settings_group_schema(group_id),
+                description_placeholders={"group_name": groups.get(group_id, {}).get("label", group_id)},
+            )
+
+        current_group = self._current_device_settings_group()
+        if user_input is not None and current_group:
+            errors: dict[str, str] = {}
+            group_meta = groups.get(current_group, {})
+            settings = group_meta.get("settings", [])
+
+            values_to_write: dict[int, int] = {}
+            persisted_values: dict[str, int] = dict(self._current().get(CONF_DEVICE_SETTINGS_VALUES, {}) or {})
+            for setting in settings:
+                key = setting["key"]
+                value = user_input.get(key)
+                min_value = setting.get("min")
+                max_value = setting.get("max")
+                if value is None:
+                    continue
+                if min_value is not None and value < min_value:
+                    errors[key] = "invalid_device_setting"
+                if max_value is not None and value > max_value:
+                    errors[key] = "invalid_device_setting"
+                values_to_write[int(setting["address"])] = int(value)
+                persisted_values[key] = int(value)
+
+            if not errors:
+                config = self._current()
+                write_ok = await _async_write_device_settings(self.hass, config, values_to_write)
+                if not write_ok:
+                    errors["base"] = "cannot_connect"
+
+            if errors:
+                return self.async_show_form(
+                    step_id="device_settings_group",
+                    data_schema=self._device_settings_group_schema(current_group, user_input),
+                    errors=errors,
+                    description_placeholders={"group_name": groups.get(current_group, {}).get("label", current_group)},
+                )
+
+            merged = self._current()
+            merged[CONF_DEVICE_SETTINGS_VALUES] = persisted_values
+            return self.async_create_entry(title="Options", data=merged)
+
+        return self.async_show_form(
+            step_id="device_settings",
+            data_schema=self._device_settings_menu_schema(),
+        )
+
+    def _current(self) -> dict:
+        return {**self._entry.data, **self._entry.options}
+
+    def _menu_schema(self):
+        return vol.Schema(
+            {
+                vol.Required(CONF_OPTIONS_ACTION, default="connection"): vol.In(
+                    {
+                        "connection": "Modify connection and update settings",
+                        "entities": "Modify scanned optional entities",
+                        "device_settings": "Device Settings",
+                    }
+                )
+            }
+        )
+
+    def _device_settings_menu_schema(self):
+        groups = self._device_setting_groups()
+        return vol.Schema(
+            {
+                vol.Required(CONF_DEVICE_SETTINGS_GROUP): vol.In(
+                    {group_id: group_meta["label"] for group_id, group_meta in groups.items()}
+                )
+            }
+        )
+
+    def _device_settings_group_schema(self, group_id: str, current_values: dict | None = None):
+        groups = self._device_setting_groups()
+        settings = groups.get(group_id, {}).get("settings", [])
+        persisted = dict(self._current().get(CONF_DEVICE_SETTINGS_VALUES, {}) or {})
+        current_values = current_values or {}
+        schema_items: dict[Any, Any] = {}
+
+        for setting in settings:
+            key = setting["key"]
+            fallback = persisted.get(key)
+            if key in current_values:
+                fallback = current_values[key]
+            if fallback is None:
+                fallback = setting.get("min") if setting.get("min") is not None else 0
+
+            schema_items[vol.Required(key, default=fallback)] = vol.All(vol.Coerce(int))
+
+        return vol.Schema(schema_items)
+
+    def _current_device_settings_group(self) -> str | None:
+        return self._device_settings_group
+
+    def _device_setting_groups(self) -> dict[str, dict]:
+        from .registers import device_setting_groups
+
+        return device_setting_groups()
+
+    def _connection_schema(self, current: dict):
+        return vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=current.get(CONF_PORT, 502)): vol.All(vol.Coerce(int)),
+                vol.Required(CONF_NAME, default=current.get(CONF_NAME, "Plum Ecovent")): str,
+                vol.Required(CONF_UPDATE_RATE, default=current.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE)): vol.All(vol.Coerce(int)),
+                vol.Required(CONF_UNIT, default=current.get(CONF_UNIT, 1)): vol.All(vol.Coerce(int)),
+            }
+        )
 
     def _optional_choices(self) -> dict[str, str]:
         from .registers import optional_entity_catalog
 
         return optional_entity_catalog()
 
-    def _schema(self, current: dict):
+    def _entities_schema(self, current: dict):
         choices = self._optional_choices()
         default_forced = [
             value for value in current.get(CONF_OPTIONAL_FORCE_ENABLE, []) if value in choices
@@ -182,11 +367,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         return vol.Schema(
             {
-                vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
-                vol.Required(CONF_PORT, default=current.get(CONF_PORT, 502)): vol.All(vol.Coerce(int)),
-                vol.Required(CONF_NAME, default=current.get(CONF_NAME, "Plum Ecovent")): str,
-                vol.Required(CONF_UPDATE_RATE, default=current.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE)): vol.All(vol.Coerce(int)),
-                vol.Required(CONF_UNIT, default=current.get(CONF_UNIT, 1)): vol.All(vol.Coerce(int)),
                 vol.Optional(CONF_OPTIONAL_FORCE_ENABLE, default=default_forced): cv.multi_select(choices),
                 vol.Optional(CONF_OPTIONAL_DISABLE, default=default_disabled): cv.multi_select(choices),
             }
@@ -226,6 +406,26 @@ async def _async_fetch_device_identity(hass, config: dict) -> dict[str, str]:
                 result[CONF_DEVICE_SERIAL] = serial
 
         return result
+    finally:
+        await manager.async_close()
+
+
+async def _async_write_device_settings(hass, config: dict, values_by_address: dict[int, int]) -> bool:
+    """Write one or more configurable registers through a short-lived manager."""
+    if not values_by_address:
+        return True
+
+    manager = ModbusClientManager(hass, config)
+    connected = await manager.async_connect()
+    if not connected:
+        return False
+
+    try:
+        for address, value in values_by_address.items():
+            success = await manager.write_register(int(address), int(value))
+            if not success:
+                return False
+        return True
     finally:
         await manager.async_close()
 

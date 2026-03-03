@@ -59,7 +59,7 @@ Quick flow:
 2) Move release notes from `## [Unreleased]` into a new version section in `CHANGELOG.md`.
 3) Run validation:
    - `pytest -q`
-4) Commit and tag with the same version string (example: `0.3.0-b1`).
+4) Commit and tag with the same version string (example: `0.4.0`).
 5) Push branch and tag:
    - `git push`
-   - `git push origin 0.3.0-b1`
+   - `git push origin 0.4.0`

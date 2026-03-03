@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-03-03
+### Added
+- Added local integration brand assets under `custom_components/plum_ecovent/brand/`:
+	`icon.png`, `icon@2x.png`, `logo.png`, `logo@2x.png`, `dark_logo.png`, `dark_logo@2x.png`.
+
+### Changed
+- Updated integration version references to `0.4.0` in `manifest.json` and `const.py`.
+- Aligned integration brand metadata to `plum_ecovent` for local brand asset resolution.
+- Prepared release tag target `0.4.0` on `dev` branch.
+- Refactored options flow to branch by task (`connection`, `optional entities`, and new `Device Settings`).
+- Added grouped `Device Settings` sections for supply fan, exhaust fan, auto control, boost, and temperature values.
+- Reduced device-page clutter by moving configurable number registers to options/services management instead of per-setting number entities.
+
+### Added
+- Added `plum_ecovent.set_device_setting` service for automation-friendly writes to options-managed device settings.
+- Added `custom_components/plum_ecovent/services.yaml` service descriptions.
+
 ## [0.3.0-b1] - 2026-03-02
 ### Added
 - Diagnostics support via `diagnostics.py` for safer support troubleshooting.

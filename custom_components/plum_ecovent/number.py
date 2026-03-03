@@ -38,6 +38,7 @@ except Exception:  # Running outside Home Assistant for tests
 from .const import DOMAIN
 from .coordinator import build_definition_key
 from .modbus_client import ModbusClientManager
+from .registers import device_setting_addresses
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,8 +55,11 @@ async def async_setup_entry(
     if "number" not in discovered:
         _LOGGER.warning("No discovered number definitions found for entry %s; no numbers will be created", entry.entry_id)
 
+    managed_addresses = device_setting_addresses()
     entities = []
     for definition in numbers:
+        if int(definition.address) in managed_addresses:
+            continue
         entities.append(PlumEcoventNumber(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 

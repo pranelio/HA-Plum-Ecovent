@@ -1,0 +1,40 @@
+set_device_setting:
+  name: Set device setting
+  description: Write one options-managed Plum device setting register value.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Config entry id. Required only if multiple Plum Ecovent entries are loaded.
+      example: 01HVABCDEF1234567890
+      required: false
+      selector:
+        text:
+    setting:
+      name: Setting
+      description: Device setting key from the options-flow Device Settings section.
+      required: true
+      selector:
+        select:
+          options:
+            - supply_fan_speed_g1
+            - supply_fan_speed_g2
+            - supply_fan_speed_g3
+            - exhaust_fan_speed_g1
+            - exhaust_fan_speed_g2
+            - exhaust_fan_speed_g3
+            - auto_minimum_fan_speed
+            - auto_maximum_fan_speed
+            - boost_supply_speed
+            - boost_extract_speed
+            - boost_duration
+            - comfort_temperature_day
+            - comfort_temperature_night
+            - winter_mode_activation_temperature
+            - summer_mode_activation_temperature
+    value:
+      name: Value
+      description: Integer value to write for the selected setting.
+      required: true
+      selector:
+        number:
+          mode: box

@@ -192,3 +192,98 @@ def optional_entity_catalog() -> dict[str, str]:
             catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
 
     return catalog
+
+
+DEVICE_SETTINGS_GROUPS: dict[str, dict[str, Any]] = {
+    "supply_fan": {
+        "label": "Supply fan speeds",
+        "names": [
+            "Supply Fan Speed G1",
+            "Supply Fan Speed G2",
+            "Supply Fan Speed G3",
+        ],
+    },
+    "exhaust_fan": {
+        "label": "Exhaust fan speeds",
+        "names": [
+            "Exhaust Fan Speed G1",
+            "Exhaust Fan Speed G2",
+            "Exhaust Fan Speed G3",
+        ],
+    },
+    "auto_control": {
+        "label": "Auto control",
+        "names": [
+            "Auto Minimum Fan Speed",
+            "Auto Maximum Fan Speed",
+        ],
+    },
+    "boost": {
+        "label": "Boost settings",
+        "names": [
+            "Boost Supply Speed",
+            "Boost Extract Speed",
+            "Boost Duration",
+        ],
+    },
+    "temperature": {
+        "label": "Temperature settings",
+        "names": [
+            "Comfort Temperature Day",
+            "Comfort Temperature Night",
+            "Winter Mode Activation Temperature",
+            "Summer Mode Activation Temperature",
+        ],
+    },
+}
+
+
+def device_setting_key(definition: NumberDef) -> str:
+    """Return a stable options/service key for a configurable number definition."""
+    name_slug = str(definition.name).strip().lower().replace(" ", "_")
+    return name_slug
+
+
+def device_setting_catalog() -> dict[str, dict[str, Any]]:
+    """Return settings map key -> metadata for configurable values managed via options/services."""
+    by_name: dict[str, NumberDef] = {definition.name: definition for definition in NUMBERS}
+    catalog: dict[str, dict[str, Any]] = {}
+
+    for group_id, group_meta in DEVICE_SETTINGS_GROUPS.items():
+        for name in group_meta["names"]:
+            definition = by_name.get(name)
+            if definition is None:
+                continue
+            key = device_setting_key(definition)
+            catalog[key] = {
+                "key": key,
+                "group": group_id,
+                "group_label": group_meta["label"],
+                "name": definition.name,
+                "address": int(definition.address),
+                "min": definition.min_value,
+                "max": definition.max_value,
+                "step": definition.step,
+                "unit": definition.unit_of_measurement,
+            }
+
+    return catalog
+
+
+def device_setting_groups() -> dict[str, dict[str, Any]]:
+    """Return grouped setting metadata for options flow rendering."""
+    catalog = device_setting_catalog()
+    grouped: dict[str, dict[str, Any]] = {}
+    for group_id, group_meta in DEVICE_SETTINGS_GROUPS.items():
+        grouped[group_id] = {
+            "label": group_meta["label"],
+            "settings": [
+                value for value in catalog.values() if value.get("group") == group_id
+            ],
+        }
+    return grouped
+
+
+def device_setting_addresses() -> set[int]:
+    """Return register addresses represented by options-managed device settings."""
+    return {int(value["address"]) for value in device_setting_catalog().values()}
