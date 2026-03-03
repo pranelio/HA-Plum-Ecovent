@@ -2,6 +2,10 @@
 
 Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integration exposes controller registers as standard Home Assistant entities (sensors, binary sensors, switches, numbers) with device registry support, configurable polling interval, and HACS-friendly packaging.
 
+## Supported Devices
+- See the live compatibility list first: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
+- Includes tested units and likely-compatible families by vendor
+
 ## Features
 - Modbus TCP client with robust signature fallbacks and connection-safe shutdown
 - Auto-created device and entities for key registers (temps, fans, filters, modes, setpoints)
@@ -21,7 +25,7 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 ## Configuration
 1) Go to **Settings → Devices & Services → Add Integration** and search for *Plum Ecovent*.  
 2) Enter:
-   - Host/IP of the Ecovent Modbus TCP server
+   - Host/IP of the Modbus TCP endpoint (typically your RTU-to-TCP gateway)
    - Port (default `502`)
    - Unit ID (default `1`)
    - Update rate in seconds (default `30`)
@@ -38,6 +42,7 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 
 ## Requirements
 - Home Assistant Core / OS / Supervised with network access to the Ecovent.  
+- Modbus RTU-to-TCP adapter (gateway) for units that expose only RS485/RTU locally.
 - `pymodbus` is pulled automatically; ensure outbound TCP to the device port.
 
 ## Troubleshooting
@@ -52,18 +57,5 @@ PRs are welcome. Please include test results (`pytest -q`) and note any register
 ## Documentation
 - HVAC naming standard for future entity/control normalization: [docs/hvac_naming_conventions.md](docs/hvac_naming_conventions.md)
 - Supported and field-tested devices: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
+- Hardware connection guide (vendor-first, model pages can be added later): [docs/hardware_connection_guide.md](docs/hardware_connection_guide.md)
 
-## Release Process
-Use the release checklist in `RELEASE.md` for every release.
-
-Quick flow:
-1) Update version in:
-   - `custom_components/plum_ecovent/manifest.json` (`version`)
-   - `custom_components/plum_ecovent/const.py` (`__version__`)
-2) Move release notes from `## [Unreleased]` into a new version section in `CHANGELOG.md`.
-3) Run validation:
-   - `pytest -q`
-4) Commit and tag with the same version string (example: `0.4.0`).
-5) Push branch and tag:
-   - `git push`
-   - `git push origin 0.4.0`
