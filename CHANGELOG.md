@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.3] - 2026-03-03
+### Fixed
+- Fixed config-flow progress state transitions so setup no longer gets stuck and now reliably reaches successful entry creation.
+
+### Changed
+- Options flow entity selection now shows current values from coordinator data.
+- Options flow current values now render with cleaner formatting and units where available.
+- Updated integration version references to `0.4.3` in `manifest.json` and `const.py`.
+
 ## [0.4.2] - 2026-03-03
 ### Fixed
 - Setup register probing now treats Modbus illegal-data/illegal-address exception responses as unsupported immediately, instead of repeatedly retrying those registers.

@@ -30,6 +30,7 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     DOMAIN,
 )
+from .coordinator import build_definition_key
 from .device_info import decode_utf8_registers, format_firmware
 from .modbus_client import ModbusClientManager
 
@@ -43,8 +44,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
-        self._verify_task: asyncio.Task[str | None] | None = None
-        self._probe_task: asyncio.Task[tuple[list[int], dict[str, str]]] | None = None
+        self._local_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._verify_error: str | None = None
+        self._probe_result: tuple[list[int], dict[str, str]] | None = None
         self._schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=""): str,
@@ -59,6 +61,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 1: ask adapter IP/port/unit and integration name."""
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=self._schema)
+
+        self._clear_progress_tasks()
+        self._verify_error = None
+        self._probe_result = None
 
         self._data.update(user_input)
         errors = self._validate_inputs(self._data)
@@ -81,43 +87,74 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not host or port is None:
             return await self.async_step_user()
 
-        if self._verify_task is None:
-            self._verify_task = asyncio.create_task(_async_test_connection(str(host), int(port)))
+        verify_task = self._get_task("verify")
+        if verify_task is None:
+            verify_task = asyncio.create_task(_async_test_connection(str(host), int(port)))
+            self._set_task("verify", verify_task)
 
-        if not self._verify_task.done():
+        if not verify_task.done():
             return self.async_show_progress(
                 step_id="verify_adapter",
                 progress_action="verify_adapter",
-                progress_task=self._verify_task,
+                progress_task=verify_task,
                 description_placeholders={"host": str(host), "port": str(port)},
             )
 
-        connection_error = await self._verify_task
-        self._verify_task = None
-        if connection_error is not None:
+        self._pop_task("verify")
+        try:
+            connection_error = await verify_task
+        except Exception:
+            _LOGGER.exception("Adapter verification failed unexpectedly")
+            connection_error = "cannot_connect"
+        self._verify_error = connection_error
+
+        return self.async_show_progress_done(next_step_id="verify_adapter_result")
+
+    async def async_step_verify_adapter_result(self, user_input=None):
+        """Handle result from adapter verification progress step."""
+        host = self._data.get(CONF_HOST)
+        port = self._data.get(CONF_PORT)
+        if self._verify_error is not None:
+            error = self._verify_error
+            self._verify_error = None
             return self.async_show_form(
                 step_id="verify_adapter",
                 data_schema=vol.Schema({}),
-                errors={"base": connection_error},
+                errors={"base": error},
                 description_placeholders={"host": str(host), "port": str(port)},
             )
 
-        return self.async_show_progress_done(next_step_id="probe_registers")
+        return await self.async_step_probe_registers()
 
     async def async_step_probe_registers(self, user_input=None):
         """Step 3: probe all defined registers and save responding address list."""
-        if self._probe_task is None:
-            self._probe_task = asyncio.create_task(self._async_probe_and_fetch_identity())
+        probe_task = self._get_task("probe")
+        if probe_task is None:
+            probe_task = asyncio.create_task(self._async_probe_and_fetch_identity())
+            self._set_task("probe", probe_task)
 
-        if not self._probe_task.done():
+        if not probe_task.done():
             return self.async_show_progress(
                 step_id="probe_registers",
                 progress_action="probe_registers",
-                progress_task=self._probe_task,
+                progress_task=probe_task,
             )
 
-        responding, identity = await self._probe_task
-        self._probe_task = None
+        self._pop_task("probe")
+        try:
+            self._probe_result = await probe_task
+        except Exception:
+            _LOGGER.exception("Register probe failed unexpectedly")
+            self._probe_result = ([], {})
+
+        return self.async_show_progress_done(next_step_id="probe_registers_result")
+
+    async def async_step_probe_registers_result(self, user_input=None):
+        """Handle result from register probing progress step."""
+        probe_result = self._probe_result or ([], {})
+        self._probe_result = None
+        responding, identity = probe_result
+
         if not responding:
             return self.async_show_form(
                 step_id="probe_registers",
@@ -158,6 +195,37 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if update_rate is None or not (1 <= int(update_rate) <= 3600):
             errors[CONF_UPDATE_RATE] = "invalid_update_rate"
         return errors
+
+    def _task_bucket(self) -> dict[str, asyncio.Task[Any]]:
+        if self.hass is not None:
+            domain_data = self.hass.data.setdefault(DOMAIN, {})
+            flow_tasks = domain_data.setdefault("_flow_tasks", {})
+            if isinstance(flow_tasks, dict):
+                return flow_tasks
+        return self._local_tasks
+
+    def _task_key(self, name: str) -> str:
+        flow_id = getattr(self, "flow_id", "unknown")
+        return f"{flow_id}:{name}"
+
+    def _get_task(self, name: str) -> asyncio.Task[Any] | None:
+        task = self._task_bucket().get(self._task_key(name))
+        if isinstance(task, asyncio.Task):
+            return task
+        return None
+
+    def _set_task(self, name: str, task: asyncio.Task[Any]) -> None:
+        self._task_bucket()[self._task_key(name)] = task
+
+    def _pop_task(self, name: str) -> None:
+        self._task_bucket().pop(self._task_key(name), None)
+
+    def _clear_progress_tasks(self) -> None:
+        for name in ("verify", "probe"):
+            task = self._get_task(name)
+            if task is not None and not task.done():
+                task.cancel()
+            self._pop_task(name)
 
     @staticmethod
     @callback
@@ -260,6 +328,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             merged[CONF_OPTIONAL_DISABLE] = sorted(set(disabled) | set(unknown_disabled))
             return self.async_create_entry(title="Options", data=merged)
 
+        runtime_data = self._runtime_data()
+        coordinator = runtime_data.get("coordinator") if isinstance(runtime_data, dict) else None
+        if coordinator is not None and hasattr(coordinator, "async_request_refresh"):
+            try:
+                await asyncio.wait_for(coordinator.async_request_refresh(), timeout=6.0)
+            except Exception:
+                _LOGGER.debug("Unable to refresh coordinator before showing entity options", exc_info=True)
+
         current = self._current()
         return self.async_show_form(step_id="entities", data_schema=self._entities_schema(current))
 
@@ -355,7 +431,98 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     def _entity_choices(self) -> dict[str, str]:
         from .registers import entity_catalog
 
-        return entity_catalog()
+        base_catalog = entity_catalog()
+        runtime_data = self._runtime_data()
+        coordinator = runtime_data.get("coordinator") if isinstance(runtime_data, dict) else None
+        values = getattr(coordinator, "data", {}) if coordinator is not None else {}
+
+        if not isinstance(values, dict) or not values:
+            return base_catalog
+
+        enriched: dict[str, str] = {}
+        for entity_id, label in base_catalog.items():
+            current_value = self._current_value_for_entity_id(entity_id, values)
+            if current_value is None:
+                enriched[entity_id] = f"{label} [current: unavailable]"
+            else:
+                enriched[entity_id] = f"{label} [current: {current_value}]"
+        return enriched
+
+    def _runtime_data(self) -> dict[str, Any]:
+        runtime_data = getattr(self._entry, "runtime_data", None)
+        if isinstance(runtime_data, dict):
+            return runtime_data
+
+        if hasattr(self, "hass") and self.hass is not None:
+            domain_data = self.hass.data.get(DOMAIN, {})
+            if isinstance(domain_data, dict):
+                fallback = domain_data.get(self._entry.entry_id)
+                if isinstance(fallback, dict):
+                    return fallback
+        return {}
+
+    def _current_value_for_entity_id(self, entity_id: str, values: dict[str, Any]) -> str | None:
+        parts = entity_id.split(":", 2)
+        if len(parts) != 3:
+            return None
+        platform, address_part, key = parts
+        try:
+            address = int(address_part)
+        except ValueError:
+            return None
+
+        definition = self._definition_for(platform, address, key)
+        if definition is None:
+            return None
+
+        coordinator_key = build_definition_key(definition)
+        raw_value = values.get(coordinator_key)
+        if raw_value is None:
+            return None
+
+        if platform in ("binary_sensor", "switch"):
+            bitmask = getattr(definition, "bitmask", None)
+            if bitmask is not None:
+                return "on" if bool(int(raw_value) & int(bitmask)) else "off"
+            return "on" if bool(raw_value) else "off"
+
+        return self._format_value_with_unit(definition, raw_value)
+
+    def _format_value_with_unit(self, definition: Any, value: Any) -> str:
+        decimals = getattr(definition, "accuracy_decimals", None)
+        formatted: str
+        if isinstance(value, float) and decimals is not None:
+            try:
+                formatted = f"{value:.{int(decimals)}f}"
+            except Exception:
+                formatted = str(value)
+        else:
+            formatted = str(value)
+
+        unit = getattr(definition, "unit_of_measurement", None)
+        if unit:
+            return f"{formatted} {unit}"
+        return formatted
+
+    def _definition_for(self, platform: str, address: int, key: str):
+        from . import registers
+
+        by_platform: dict[str, list[Any]] = {
+            "sensor": list(registers.SENSORS),
+            "binary_sensor": list(registers.BINARY_SENSORS),
+            "switch": list(registers.SWITCHES),
+            "number": list(registers.NUMBERS),
+        }
+        definitions = by_platform.get(platform, [])
+        for definition in definitions:
+            if int(getattr(definition, "address", -1)) != address:
+                continue
+            definition_key = getattr(definition, "key", None)
+            if definition_key is None:
+                definition_key = str(getattr(definition, "name", "unknown")).strip().lower().replace(" ", "_")
+            if str(definition_key) == key:
+                return definition
+        return None
 
     def _entities_schema(self, current: dict):
         choices = self._entity_choices()
