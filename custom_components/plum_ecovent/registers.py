@@ -172,13 +172,18 @@ SWITCHES: List[SwitchDef] = [
 ]
 
 
-def optional_entity_id(platform: str, definition: Any) -> str:
-    """Return a stable identifier for an optional entity definition."""
+def entity_definition_id(platform: str, definition: Any) -> str:
+    """Return a stable identifier for an entity definition."""
     return f"{platform}:{int(getattr(definition, 'address', -1))}:{definition_key(definition)}"
 
 
-def optional_entity_catalog() -> dict[str, str]:
-    """Return selectable optional entities mapped by id -> user label."""
+def optional_entity_id(platform: str, definition: Any) -> str:
+    """Backward-compatible alias for old optional-entity identifier helper."""
+    return entity_definition_id(platform, definition)
+
+
+def entity_catalog() -> dict[str, str]:
+    """Return selectable entities mapped by id -> user label."""
     by_platform: dict[str, list[Any]] = {
         "sensor": SENSORS,
         "binary_sensor": BINARY_SENSORS,
@@ -189,9 +194,26 @@ def optional_entity_catalog() -> dict[str, str]:
     catalog: dict[str, str] = {}
     for platform, definitions in by_platform.items():
         for definition in definitions:
+            entity_id = entity_definition_id(platform, definition)
+            catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
+
+    return catalog
+
+
+def optional_entity_catalog() -> dict[str, str]:
+    """Return selectable optional entities mapped by id -> user label."""
+    catalog: dict[str, str] = {}
+    by_platform: dict[str, list[Any]] = {
+        "sensor": SENSORS,
+        "binary_sensor": BINARY_SENSORS,
+        "switch": SWITCHES,
+        "number": NUMBERS,
+    }
+    for platform, definitions in by_platform.items():
+        for definition in definitions:
             if not getattr(definition, "optional", False):
                 continue
-            entity_id = optional_entity_id(platform, definition)
+            entity_id = entity_definition_id(platform, definition)
             catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
 
     return catalog

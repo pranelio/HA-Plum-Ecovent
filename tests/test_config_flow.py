@@ -14,6 +14,7 @@ from custom_components.plum_ecovent.const import (
     CONF_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_RESPONDING_REGISTERS,
 )
 from homeassistant.const import CONF_NAME
 
@@ -34,8 +35,12 @@ async def test_tcp_flow(monkeypatch):
     async def _identity(_hass, _config):
         return {}
 
+    async def _probe(_hass, _config, retries=2):
+        return [201, 202]
+
     monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
     monkeypatch.setattr(cf, "_async_fetch_device_identity", _identity)
+    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe)
     # patch out hass-dependent helpers since we don't run under HA
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
@@ -58,20 +63,21 @@ async def test_tcp_flow(monkeypatch):
     assert result2["data"][CONF_HOST] == "1.2.3.4"
     assert result2["data"][CONF_PORT] == 502
     assert result2["data"][CONF_UNIT] == 17
+    assert result2["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
 
     # invalid port should return form with error
-    result3 = await flow.async_step_user(
+    result4 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1, CONF_UPDATE_RATE: 30}
     )
-    assert result3["type"] == "form"
-    assert result3["errors"][CONF_PORT] == "invalid_port"
+    assert result4["type"] == "form"
+    assert result4["errors"][CONF_PORT] == "invalid_port"
 
     # invalid unit should return form with error
-    result4 = await flow.async_step_user(
+    result5 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0, CONF_UPDATE_RATE: 30}
     )
-    assert result4["type"] == "form"
-    assert result4["errors"][CONF_UNIT] == "invalid_unit"
+    assert result5["type"] == "form"
+    assert result5["errors"][CONF_UNIT] == "invalid_unit"
 
 
 # additional helper test for setup_entry device registration
@@ -213,7 +219,7 @@ async def test_options_flow_branching_entities(monkeypatch):
     from types import SimpleNamespace
     import custom_components.plum_ecovent.config_flow as cf
 
-    monkeypatch.setattr(cf.OptionsFlowHandler, "_optional_choices", lambda self: {"sensor:82:co2": "sensor · CO2 (82)"})
+    monkeypatch.setattr(cf.OptionsFlowHandler, "_entity_choices", lambda self: {"sensor:82:co2": "sensor · CO2 (82)"})
 
     entry = SimpleNamespace(
         data={

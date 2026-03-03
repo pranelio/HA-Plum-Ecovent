@@ -11,12 +11,13 @@
       "invalid_host": "Host name or IP address is invalid or cannot be resolved",
       "invalid_port": "Port must be between 1 and 65535",
       "invalid_unit": "Modbus Address must be between 1 and 247",
-      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds"
+      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
+      "probe_failed": "Could not read any supported registers from the device"
     },
     "step": {
       "user": {
         "title": "Plum Ecovent setup",
-        "description": "Enter the TCP connection parameters for the Ecovent device.",
+        "description": "Step 1/3: Enter Modbus TCP adapter and polling parameters.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -25,8 +26,13 @@
           "name": "Name"
         }
       },
-      "modbus_tcp": {
-        "title": "Modbus TCP settings"
+      "verify_adapter": {
+        "title": "Verify adapter",
+        "description": "Step 2/3: Validating TCP reachability for {host}:{port}."
+      },
+      "probe_registers": {
+        "title": "Probe device registers",
+        "description": "Step 3/3: Probing available device registers."
       }
     }
   },
@@ -47,9 +53,9 @@
         "title": "Plum Ecovent options",
         "description": "Choose what you want to change.",
         "data": {
-          "options_action": "Change area",
+          "options_action": "Action",
           "connection": "Modify connection and update settings",
-          "entities": "Modify scanned optional entities",
+          "entities": "Modify scanned entities",
           "device_settings": "Device Settings"
         }
       },
@@ -64,11 +70,11 @@
         }
       },
       "entities": {
-        "title": "Optional entity reporting",
-        "description": "Choose optional entities to always report, or force as unavailable by disabling them.",
+        "title": "Entity reporting",
+        "description": "Choose entities to always include, or hide from Home Assistant.",
         "data": {
-          "optional_force_enable": "Optional entities to enable",
-          "optional_disable": "Optional entities to disable"
+          "optional_force_enable": "Entities to force include",
+          "optional_disable": "Entities to disable"
         }
       },
       "device_settings": {

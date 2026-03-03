@@ -27,6 +27,7 @@ CONF_OPTIONAL_DISABLE = "optional_disable"
 CONF_OPTIONS_ACTION = "options_action"
 CONF_DEVICE_SETTINGS_VALUES = "device_settings_values"
 CONF_DEVICE_SETTINGS_GROUP = "device_settings_group"
+CONF_RESPONDING_REGISTERS = "responding_registers"
 
 # Device identity metadata (fetched once via Modbus)
 CONF_DEVICE_SERIAL = "device_serial"

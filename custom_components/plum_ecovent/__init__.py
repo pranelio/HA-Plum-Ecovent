@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
+    CONF_RESPONDING_REGISTERS,
     CONF_DEVICE_SETTINGS_VALUES,
     CONF_DEVICE_SERIAL,
     CONF_DEVICE_NAME,
@@ -62,7 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from . import registers
     discovered_definitions = await _async_discover_definitions(manager, registers, config)
     discovered_entities = {
-        platform_name: [f"{definition.address}:{definition.name}" for definition in definitions]
+        platform_name: [registers.entity_definition_id(platform_name, definition) for definition in definitions]
         for platform_name, definitions in discovered_definitions.items()
     }
 
@@ -201,7 +202,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _async_discover_definitions(
     manager: ModbusClientManager, registers_module, config: dict[str, Any]
 ) -> dict[str, list[Any]]:
-    """Discover model-dependent entities by probing optional registers only."""
+    """Discover entities using probed responding registers and user overrides."""
     by_platform: dict[str, list[Any]] = {
         "sensor": list(registers_module.SENSORS),
         "binary_sensor": list(registers_module.BINARY_SENSORS),
@@ -210,59 +211,64 @@ async def _async_discover_definitions(
     }
 
     discovered: dict[str, list[Any]] = {}
+    responding_config = config.get(CONF_RESPONDING_REGISTERS, []) or []
+    responding_registers: set[int] = set()
+    for value in responding_config:
+        try:
+            responding_registers.add(int(value))
+        except (TypeError, ValueError):
+            continue
+
     availability_cache: dict[int, bool] = {}
-    forced_optional = set(config.get(CONF_OPTIONAL_FORCE_ENABLE, []) or [])
-    disabled_optional = set(config.get(CONF_OPTIONAL_DISABLE, []) or [])
-    if forced_optional & disabled_optional:
+    forced_entities = set(config.get(CONF_OPTIONAL_FORCE_ENABLE, []) or [])
+    disabled_entities = set(config.get(CONF_OPTIONAL_DISABLE, []) or [])
+    if forced_entities & disabled_entities:
         _LOGGER.warning(
-            "Optional entity override conflict detected; disable takes precedence for: %s",
-            sorted(forced_optional & disabled_optional),
+            "Entity override conflict detected; disable takes precedence for: %s",
+            sorted(forced_entities & disabled_entities),
         )
 
+    has_probe_snapshot = bool(responding_registers)
+
     for platform_name, definitions in by_platform.items():
-        optional_entity_id = getattr(registers_module, "optional_entity_id")
+        entity_definition_id = getattr(registers_module, "entity_definition_id")
         selected: list[Any] = []
-        required_count = 0
-        optional_count = 0
-        discovered_optional: list[str] = []
-        skipped_optional: list[str] = []
+        included_entities: list[str] = []
+        skipped_entities: list[str] = []
         for definition in definitions:
-            if not getattr(definition, "optional", False):
-                selected.append(definition)
-                required_count += 1
-                continue
+            entity_id = entity_definition_id(platform_name, definition)
+            address = int(getattr(definition, "address", -1))
 
-            optional_count += 1
-            entity_id = optional_entity_id(platform_name, definition)
-
-            if entity_id in disabled_optional:
-                skipped_optional.append(entity_id)
+            if entity_id in disabled_entities:
+                skipped_entities.append(entity_id)
                 _LOGGER.info(
-                    "Skipping optional %s entity '%s' due to manual disable override",
+                    "Skipping %s entity '%s' due to manual disable override",
                     platform_name,
                     getattr(definition, "name", "unknown"),
                 )
                 continue
 
-            if entity_id in forced_optional:
+            if entity_id in forced_entities:
                 selected.append(definition)
-                discovered_optional.append(entity_id)
+                included_entities.append(entity_id)
                 continue
 
-            address = int(getattr(definition, "address", -1))
-            is_reachable = availability_cache.get(address)
-            if is_reachable is None:
-                response = await manager.read_holding_registers(address, 1)
-                is_reachable = bool(response is not None and hasattr(response, "registers"))
-                availability_cache[address] = is_reachable
+            if has_probe_snapshot:
+                is_reachable = address in responding_registers
+            else:
+                is_reachable = availability_cache.get(address)
+                if is_reachable is None:
+                    response = await manager.read_holding_registers(address, 1)
+                    is_reachable = bool(response is not None and hasattr(response, "registers"))
+                    availability_cache[address] = is_reachable
 
             if is_reachable:
                 selected.append(definition)
-                discovered_optional.append(entity_id)
+                included_entities.append(entity_id)
             else:
-                skipped_optional.append(entity_id)
+                skipped_entities.append(entity_id)
                 _LOGGER.info(
-                    "Skipping optional %s entity '%s' (register %s not reachable)",
+                    "Skipping %s entity '%s' (register %s not reachable)",
                     platform_name,
                     getattr(definition, "name", "unknown"),
                     address,
@@ -270,17 +276,16 @@ async def _async_discover_definitions(
 
         discovered[platform_name] = selected
         _LOGGER.info(
-            "Entity discovery for %s: required=%s optional=%s discovered_optional=%s total_enabled=%s",
+            "Entity discovery for %s: selected=%s skipped=%s total_enabled=%s",
             platform_name,
-            required_count,
-            optional_count,
-            len(discovered_optional),
+            len(included_entities),
+            len(skipped_entities),
             len(selected),
         )
-        if discovered_optional:
-            _LOGGER.debug("Discovered optional %s entities: %s", platform_name, discovered_optional)
-        if skipped_optional:
-            _LOGGER.debug("Skipped optional %s entities: %s", platform_name, skipped_optional)
+        if included_entities:
+            _LOGGER.debug("Included %s entities: %s", platform_name, included_entities)
+        if skipped_entities:
+            _LOGGER.debug("Skipped %s entities: %s", platform_name, skipped_entities)
 
     _LOGGER.info(
         "Entity discovery complete: sensor=%s binary_sensor=%s switch=%s number=%s",
