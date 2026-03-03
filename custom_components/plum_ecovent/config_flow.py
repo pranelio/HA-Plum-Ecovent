@@ -45,8 +45,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
         self._local_tasks: dict[str, asyncio.Task[Any]] = {}
-        self._verify_error: str | None = None
-        self._probe_result: tuple[list[int], dict[str, str]] | None = None
+        self._local_state: dict[str, Any] = {}
         self._schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=""): str,
@@ -63,8 +62,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id="user", data_schema=self._schema)
 
         self._clear_progress_tasks()
-        self._verify_error = None
-        self._probe_result = None
+        self._clear_progress_state()
 
         self._data.update(user_input)
         errors = self._validate_inputs(self._data)
@@ -87,6 +85,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not host or port is None:
             return await self.async_step_user()
 
+        if self._get_state("verify_done", False):
+            return self.async_show_progress_done(next_step_id="verify_adapter_result")
+
         verify_task = self._get_task("verify")
         if verify_task is None:
             verify_task = asyncio.create_task(_async_test_connection(str(host), int(port)))
@@ -106,7 +107,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:
             _LOGGER.exception("Adapter verification failed unexpectedly")
             connection_error = "cannot_connect"
-        self._verify_error = connection_error
+        self._set_state("verify_error", connection_error)
+        self._set_state("verify_done", True)
 
         return self.async_show_progress_done(next_step_id="verify_adapter_result")
 
@@ -114,9 +116,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle result from adapter verification progress step."""
         host = self._data.get(CONF_HOST)
         port = self._data.get(CONF_PORT)
-        if self._verify_error is not None:
-            error = self._verify_error
-            self._verify_error = None
+        if self._get_state("verify_done", False):
+            error = self._get_state("verify_error")
+            self._set_state("verify_done", False)
+            self._set_state("verify_error", None)
+
+            if error is None:
+                return await self.async_step_probe_registers()
+
             return self.async_show_form(
                 step_id="verify_adapter",
                 data_schema=vol.Schema({}),
@@ -124,10 +131,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 description_placeholders={"host": str(host), "port": str(port)},
             )
 
-        return await self.async_step_probe_registers()
+        return await self.async_step_verify_adapter()
 
     async def async_step_probe_registers(self, user_input=None):
         """Step 3: probe all defined registers and save responding address list."""
+        if self._get_state("probe_done", False):
+            return self.async_show_progress_done(next_step_id="probe_registers_result")
+
         probe_task = self._get_task("probe")
         if probe_task is None:
             probe_task = asyncio.create_task(self._async_probe_and_fetch_identity())
@@ -142,17 +152,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._pop_task("probe")
         try:
-            self._probe_result = await probe_task
+            self._set_state("probe_result", await probe_task)
         except Exception:
             _LOGGER.exception("Register probe failed unexpectedly")
-            self._probe_result = ([], {})
+            self._set_state("probe_result", ([], {}))
+
+        self._set_state("probe_done", True)
 
         return self.async_show_progress_done(next_step_id="probe_registers_result")
 
     async def async_step_probe_registers_result(self, user_input=None):
         """Handle result from register probing progress step."""
-        probe_result = self._probe_result or ([], {})
-        self._probe_result = None
+        probe_result = self._get_state("probe_result", ([], {}))
+        self._set_state("probe_result", None)
+        self._set_state("probe_done", False)
         responding, identity = probe_result
 
         if not responding:
@@ -204,7 +217,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return flow_tasks
         return self._local_tasks
 
+    def _state_bucket(self) -> dict[str, Any]:
+        if self.hass is not None:
+            domain_data = self.hass.data.setdefault(DOMAIN, {})
+            flow_state = domain_data.setdefault("_flow_state", {})
+            if isinstance(flow_state, dict):
+                return flow_state
+        return self._local_state
+
     def _task_key(self, name: str) -> str:
+        flow_id = getattr(self, "flow_id", "unknown")
+        return f"{flow_id}:{name}"
+
+    def _state_key(self, name: str) -> str:
         flow_id = getattr(self, "flow_id", "unknown")
         return f"{flow_id}:{name}"
 
@@ -226,6 +251,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if task is not None and not task.done():
                 task.cancel()
             self._pop_task(name)
+
+    def _get_state(self, name: str, default: Any = None) -> Any:
+        return self._state_bucket().get(self._state_key(name), default)
+
+    def _set_state(self, name: str, value: Any) -> None:
+        self._state_bucket()[self._state_key(name)] = value
+
+    def _clear_progress_state(self) -> None:
+        for name in ("verify_done", "verify_error", "probe_done", "probe_result"):
+            self._state_bucket().pop(self._state_key(name), None)
 
     @staticmethod
     @callback
