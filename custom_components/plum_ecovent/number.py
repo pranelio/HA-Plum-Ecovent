@@ -75,7 +75,7 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
-        name_slug = definition.name.replace(" ", "_").lower()
+        name_slug = (getattr(definition, "key", None) or definition.name).replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{name_slug}"
         self._attr_native_value = 0

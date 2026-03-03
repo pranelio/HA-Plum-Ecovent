@@ -77,7 +77,7 @@
         "data": {
           "device_settings_group": "Settings section",
           "supply_fan": "Supply fan speeds",
-          "exhaust_fan": "Exhaust fan speeds",
+          "exhaust_fan": "Extract fan speeds",
           "auto_control": "Auto control",
           "boost": "Boost settings",
           "temperature": "Temperature settings"
@@ -86,21 +86,21 @@
       "device_settings_group": {
         "title": "Device Settings: {group_name}",
         "data": {
-          "supply_fan_speed_g1": "Supply Fan Speed G1",
-          "supply_fan_speed_g2": "Supply Fan Speed G2",
-          "supply_fan_speed_g3": "Supply Fan Speed G3",
-          "exhaust_fan_speed_g1": "Exhaust Fan Speed G1",
-          "exhaust_fan_speed_g2": "Exhaust Fan Speed G2",
-          "exhaust_fan_speed_g3": "Exhaust Fan Speed G3",
-          "auto_minimum_fan_speed": "Auto Minimum Fan Speed",
-          "auto_maximum_fan_speed": "Auto Maximum Fan Speed",
-          "boost_supply_speed": "Boost Supply Speed",
-          "boost_extract_speed": "Boost Extract Speed",
-          "boost_duration": "Boost Duration",
-          "comfort_temperature_day": "Comfort Temperature Day",
-          "comfort_temperature_night": "Comfort Temperature Night",
-          "winter_mode_activation_temperature": "Winter Mode Activation Temperature",
-          "summer_mode_activation_temperature": "Summer Mode Activation Temperature"
+          "supply_fan_speed_g1": "Supply Fan Speed Stage 1",
+          "supply_fan_speed_g2": "Supply Fan Speed Stage 2",
+          "supply_fan_speed_g3": "Supply Fan Speed Stage 3",
+          "exhaust_fan_speed_g1": "Extract Fan Speed Stage 1",
+          "exhaust_fan_speed_g2": "Extract Fan Speed Stage 2",
+          "exhaust_fan_speed_g3": "Extract Fan Speed Stage 3",
+          "auto_minimum_fan_speed": "Auto Mode Minimum Fan Speed",
+          "auto_maximum_fan_speed": "Auto Mode Maximum Fan Speed",
+          "boost_supply_speed": "Boost 1 Supply Fan Speed",
+          "boost_extract_speed": "Boost 1 Extract Fan Speed",
+          "boost_duration": "Boost 1 Duration",
+          "comfort_temperature_day": "Comfort Temperature (Day)",
+          "comfort_temperature_night": "Comfort Temperature (Night)",
+          "winter_mode_activation_temperature": "Winter Activation Temperature",
+          "summer_mode_activation_temperature": "Summer Activation Temperature"
         }
       }
     }

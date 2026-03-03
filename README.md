@@ -51,6 +51,10 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 - Signature/type errors: integration already falls back across pymodbus signatures; update to latest release if you still see them.
 - Unique ID migration (post-update): if entities remain ignored due to old IDs, remove the Plum Ecovent integration and re-add it, or delete the affected entries from **Settings → Devices & Services → Entities** (show disabled/hidden), then reload. The integration now appends an index to unique IDs to avoid collisions.
 
+## Disclaimer
+- You are responsible for safe installation, wiring, configuration, and operation of your ventilation system and any connected adapters/gateways.
+- This integration is provided as-is, and the authors/maintainers accept no liability for any damage, data loss, malfunction, or other consequences resulting from installation or use.
+
 ## Contributing
 PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
 
