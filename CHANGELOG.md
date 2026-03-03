@@ -14,6 +14,10 @@ All notable changes to this project are documented in this file.
 - Refactored options flow to branch by task (`connection`, `optional entities`, and new `Device Settings`).
 - Added grouped `Device Settings` sections for supply fan, exhaust fan, auto control, boost, and temperature values.
 - Reduced device-page clutter by moving configurable number registers to options/services management instead of per-setting number entities.
+- Redesigned initial setup into staged validation and discovery: adapter settings, reachability verification, then full register probing.
+- Persisted discovered responding registers in config entry data and used them as the primary runtime discovery source.
+- Replaced optional-only discovery behavior with unified entity selection across all definitions, with include/disable overrides applied consistently.
+- Updated options flow entity management labels and behavior to reflect scanned entities rather than optional-only entities.
 
 ### Added
 - Added `plum_ecovent.set_device_setting` service for automation-friendly writes to options-managed device settings.

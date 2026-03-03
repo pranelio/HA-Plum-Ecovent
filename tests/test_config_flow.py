@@ -80,6 +80,101 @@ async def test_tcp_flow(monkeypatch):
     assert result5["errors"][CONF_UNIT] == "invalid_unit"
 
 
+@pytest.mark.asyncio
+async def test_tcp_flow_verify_adapter_connection_error(monkeypatch):
+    """Flow should surface adapter verification errors at verify step."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _refused_connection(host, port, timeout=5.0):
+        return "connection_refused"
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _refused_connection)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "verify_adapter"
+    assert result["errors"]["base"] == "connection_refused"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_code", ["connection_timeout", "invalid_host"])
+async def test_tcp_flow_verify_adapter_other_connection_errors(monkeypatch, error_code):
+    """Flow should expose timeout and invalid host errors at verify step."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _failing_connection(host, port, timeout=5.0):
+        return error_code
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _failing_connection)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "verify_adapter"
+    assert result["errors"]["base"] == error_code
+
+
+@pytest.mark.asyncio
+async def test_tcp_flow_probe_failed(monkeypatch):
+    """Flow should show probe_failed when no registers respond."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _ok_connection(host, port, timeout=5.0):
+        return None
+
+    async def _probe_none(_hass, _config, retries=2):
+        return []
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
+    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe_none)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "probe_registers"
+    assert result["errors"]["base"] == "probe_failed"
+
+
 # additional helper test for setup_entry device registration
 
 class DummyRegistry:
