@@ -53,6 +53,8 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
         self._manager = manager
         self._defs = list(definitions)
         self._cycle = 0
+        self._logged_partial_failure = False
+        self._logged_total_failure = False
 
     @staticmethod
     def _key(defn: Any) -> str:
@@ -114,14 +116,26 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
             successful_reads += 1
 
         if self._defs and successful_reads == 0:
+            if not self._logged_total_failure:
+                _LOGGER.error("Error fetching plum_ecovent_data data: All Modbus reads failed")
+                self._logged_total_failure = True
+            self._logged_partial_failure = False
             raise UpdateFailed("All Modbus reads failed")
 
         if failed_reads:
-            _LOGGER.warning(
-                "Coordinator update completed with partial failures: %s/%s reads failed",
-                failed_reads,
-                successful_reads + failed_reads,
-            )
+            if not self._logged_partial_failure:
+                _LOGGER.warning(
+                    "Coordinator update completed with partial failures: %s/%s reads failed",
+                    failed_reads,
+                    successful_reads + failed_reads,
+                )
+                self._logged_partial_failure = True
+            self._logged_total_failure = False
+        else:
+            if self._logged_partial_failure or self._logged_total_failure:
+                _LOGGER.info("Modbus communication recovered; coordinator reads are stable again")
+            self._logged_partial_failure = False
+            self._logged_total_failure = False
         return results
 
 

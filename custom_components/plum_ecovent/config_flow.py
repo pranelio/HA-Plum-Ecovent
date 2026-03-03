@@ -43,6 +43,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._verify_task: asyncio.Task[str | None] | None = None
+        self._probe_task: asyncio.Task[tuple[list[int], dict[str, str]]] | None = None
         self._schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=""): str,
@@ -79,7 +81,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not host or port is None:
             return await self.async_step_user()
 
-        connection_error = await _async_test_connection(host, int(port))
+        if self._verify_task is None:
+            self._verify_task = asyncio.create_task(_async_test_connection(str(host), int(port)))
+
+        if not self._verify_task.done():
+            return self.async_show_progress(
+                step_id="verify_adapter",
+                progress_action="verify_adapter",
+                progress_task=self._verify_task,
+                description_placeholders={"host": str(host), "port": str(port)},
+            )
+
+        connection_error = await self._verify_task
+        self._verify_task = None
         if connection_error is not None:
             return self.async_show_form(
                 step_id="verify_adapter",
@@ -88,11 +102,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 description_placeholders={"host": str(host), "port": str(port)},
             )
 
-        return await self.async_step_probe_registers()
+        return self.async_show_progress_done(next_step_id="probe_registers")
 
     async def async_step_probe_registers(self, user_input=None):
         """Step 3: probe all defined registers and save responding address list."""
-        responding = await _async_probe_responding_registers(self.hass, self._data, retries=2)
+        if self._probe_task is None:
+            self._probe_task = asyncio.create_task(self._async_probe_and_fetch_identity())
+
+        if not self._probe_task.done():
+            return self.async_show_progress(
+                step_id="probe_registers",
+                progress_action="probe_registers",
+                progress_task=self._probe_task,
+            )
+
+        responding, identity = await self._probe_task
+        self._probe_task = None
         if not responding:
             return self.async_show_form(
                 step_id="probe_registers",
@@ -102,7 +127,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._data[CONF_RESPONDING_REGISTERS] = sorted(responding)
 
-        identity = await _async_fetch_device_identity(self.hass, self._data)
         if identity:
             self._data.update(identity)
             self._data[CONF_DEVICE_INFO_PENDING_FETCH] = False
@@ -113,6 +137,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         title = self._data.get(CONF_NAME, "Plum Ecovent")
         return self.async_create_entry(title=title, data=self._data)
+
+    async def _async_probe_and_fetch_identity(self) -> tuple[list[int], dict[str, str]]:
+        """Run long probe/identity operations in a tracked task for progress UI."""
+        responding = await _async_probe_responding_registers(self.hass, self._data, retries=2)
+        identity: dict[str, str] = {}
+        if responding:
+            identity = await _async_fetch_device_identity(self.hass, self._data)
+        return responding, identity
 
     def _validate_inputs(self, data: dict[str, Any]) -> dict[str, str]:
         errors: dict[str, str] = {}

@@ -41,6 +41,10 @@
         "title": "Probe device registers",
         "description": "Step 3/3: Probing available device registers."
       }
+    },
+    "progress": {
+      "verify_adapter": "Checking Modbus TCP adapter reachability…",
+      "probe_registers": "Probing device registers and reading identity…"
     }
   },
   "options": {

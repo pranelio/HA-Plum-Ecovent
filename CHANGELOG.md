@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.1] - 2026-03-03
+### Changed
+- Updated integration version references to `0.4.1` in `manifest.json` and `const.py`.
+- Improved setup UX in config flow with active progress reporting during adapter verification and register probing, so long-running steps no longer appear stalled.
+- Hardened Modbus reconnect behavior to force reconnect attempts during retry loops instead of being blocked by reconnect throttling.
+
+### Fixed
+- Setup now clearly reports the current running task while validation/probing is in progress.
+- Reduced transient communication instability by improving read/write retry handling and reconnect flows in `modbus_client.py`.
+- Treated unload-time request cancellation (`CancelledError` / pymodbus cancellation) as expected shutdown behavior to avoid false fault traces.
+- Reduced coordinator warning noise by logging partial/total read failures on state transitions and adding explicit recovery logs when communication stabilizes.
+
 ## [0.4.0] - 2026-03-03
 ### Added
 - Added local integration brand assets under `custom_components/plum_ecovent/brand/`:

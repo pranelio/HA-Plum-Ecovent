@@ -1,5 +1,6 @@
 """Tests for the config flow."""
 
+import asyncio
 import sys, os
 # make repo root available
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -17,6 +18,16 @@ from custom_components.plum_ecovent.const import (
     CONF_RESPONDING_REGISTERS,
 )
 from homeassistant.const import CONF_NAME
+
+
+async def _step_until_not_progress(step_coro_factory, max_attempts=10):
+    result = await step_coro_factory()
+    attempts = 0
+    while result.get("type") == "progress" and attempts < max_attempts:
+        await asyncio.sleep(0)
+        result = await step_coro_factory()
+        attempts += 1
+    return result
 
 
 @pytest.mark.asyncio
@@ -58,26 +69,34 @@ async def test_tcp_flow(monkeypatch):
         CONF_NAME: "My",
     }
     result2 = await flow.async_step_user(user_input)
-    assert result2["type"] == "create_entry"
-    assert result2["title"] == "My"
-    assert result2["data"][CONF_HOST] == "1.2.3.4"
-    assert result2["data"][CONF_PORT] == 502
-    assert result2["data"][CONF_UNIT] == 17
-    assert result2["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
+    assert result2["type"] == "progress"
+
+    result3 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
+    assert result3["type"] == "progress_done"
+
+    result4 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result4["type"] in ("progress", "create_entry")
+    result5 = result4 if result4["type"] == "create_entry" else await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result5["type"] == "create_entry"
+    assert result5["title"] == "My"
+    assert result5["data"][CONF_HOST] == "1.2.3.4"
+    assert result5["data"][CONF_PORT] == 502
+    assert result5["data"][CONF_UNIT] == 17
+    assert result5["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
 
     # invalid port should return form with error
-    result4 = await flow.async_step_user(
+    result6 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1, CONF_UPDATE_RATE: 30}
     )
-    assert result4["type"] == "form"
-    assert result4["errors"][CONF_PORT] == "invalid_port"
+    assert result6["type"] == "form"
+    assert result6["errors"][CONF_PORT] == "invalid_port"
 
     # invalid unit should return form with error
-    result5 = await flow.async_step_user(
+    result7 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0, CONF_UPDATE_RATE: 30}
     )
-    assert result5["type"] == "form"
-    assert result5["errors"][CONF_UNIT] == "invalid_unit"
+    assert result7["type"] == "form"
+    assert result7["errors"][CONF_UNIT] == "invalid_unit"
 
 
 @pytest.mark.asyncio
@@ -105,9 +124,12 @@ async def test_tcp_flow_verify_adapter_connection_error(monkeypatch):
             CONF_NAME: "My",
         }
     )
-    assert result["type"] == "form"
-    assert result["step_id"] == "verify_adapter"
-    assert result["errors"]["base"] == "connection_refused"
+    assert result["type"] == "progress"
+
+    result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
+    assert result2["type"] == "form"
+    assert result2["step_id"] == "verify_adapter"
+    assert result2["errors"]["base"] == "connection_refused"
 
 
 @pytest.mark.asyncio
@@ -136,9 +158,12 @@ async def test_tcp_flow_verify_adapter_other_connection_errors(monkeypatch, erro
             CONF_NAME: "My",
         }
     )
-    assert result["type"] == "form"
-    assert result["step_id"] == "verify_adapter"
-    assert result["errors"]["base"] == error_code
+    assert result["type"] == "progress"
+
+    result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
+    assert result2["type"] == "form"
+    assert result2["step_id"] == "verify_adapter"
+    assert result2["errors"]["base"] == error_code
 
 
 @pytest.mark.asyncio
@@ -170,9 +195,18 @@ async def test_tcp_flow_probe_failed(monkeypatch):
             CONF_NAME: "My",
         }
     )
-    assert result["type"] == "form"
-    assert result["step_id"] == "probe_registers"
-    assert result["errors"]["base"] == "probe_failed"
+    assert result["type"] == "progress"
+
+    result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
+    assert result2["type"] == "progress_done"
+
+    result3 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result3["type"] in ("progress", "form")
+
+    result4 = result3 if result3["type"] == "form" else await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result4["type"] == "form"
+    assert result4["step_id"] == "probe_registers"
+    assert result4["errors"]["base"] == "probe_failed"
 
 
 # additional helper test for setup_entry device registration

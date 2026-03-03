@@ -49,6 +49,8 @@ class ModbusClientManager:
         self.reconnect_interval = 10.0
         self._last_reconnect_attempt = 0.0
         self._retry_counter = 0
+        self._closing = False
+        self._connection_was_lost = False
 
     @property
     def retry_counter(self) -> int:
@@ -62,10 +64,11 @@ class ModbusClientManager:
         """Mark current client connection as lost and close it."""
         if self._client is None:
             return
+        self._connection_was_lost = True
         await self.async_close()
         self._client = None
 
-    async def async_ensure_connected(self) -> bool:
+    async def async_ensure_connected(self, *, force: bool = False) -> bool:
         """Ensure a live client connection exists.
 
         Reconnect attempts are rate-limited to avoid tight loops when the
@@ -74,18 +77,24 @@ class ModbusClientManager:
         if self._client is not None:
             return True
 
+        if self._closing:
+            return False
+
         now = time.monotonic()
         elapsed = now - self._last_reconnect_attempt
-        if elapsed < self.reconnect_interval:
+        if not force and elapsed < self.reconnect_interval:
             return False
 
         self._last_reconnect_attempt = now
         self._increment_retry_counter()
-        _LOGGER.warning("Attempting Modbus reconnect after communication loss")
+        if self._connection_was_lost:
+            _LOGGER.warning("Attempting Modbus reconnect after communication loss")
         return await self.async_connect()
 
     async def async_connect(self) -> bool:
         """Create and connect the underlying pymodbus async client."""
+        if self._closing:
+            return False
         try:
                 # dynamic import of the async client class - pymodbus has moved
             # names across releases.  We try the known locations in order and
@@ -139,6 +148,7 @@ class ModbusClientManager:
                     _LOGGER.error("Modbus connect() returned falsy result")
                     return False
 
+            self._connection_was_lost = False
             return True
         except ModbusException as err:
             _LOGGER.exception("Failed to start Modbus client: %s", err)
@@ -149,6 +159,7 @@ class ModbusClientManager:
 
     async def async_close(self) -> None:
         """Close the underlying client connection."""
+        self._closing = True
         if not self._client:
             return
         close = getattr(self._client, "close", None)
@@ -160,6 +171,8 @@ class ModbusClientManager:
                 _LOGGER.debug("Modbus close result: %s", result)
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Error closing Modbus client")
+            finally:
+                self._client = None
 
     async def read_holding_registers(
         self, address: int, count: int, unit: int | None = None
@@ -178,7 +191,7 @@ class ModbusClientManager:
                 if attempt > 0:
                     self._increment_retry_counter()
                     await self._async_mark_connection_lost()
-                    if not await self.async_ensure_connected():
+                    if not await self.async_ensure_connected(force=True):
                         if attempt < self.retries:
                             await asyncio.sleep(self.backoff * (attempt + 1))
                         continue
@@ -206,6 +219,14 @@ class ModbusClientManager:
                         result = None
                         await self._async_mark_connection_lost()
                         break
+                    except ModbusException as err:
+                        message = str(err).lower()
+                        if "request cancelled outside pymodbus" in message or self._closing:
+                            _LOGGER.debug("Modbus read cancelled while unloading")
+                            return None
+                        result = None
+                        await self._async_mark_connection_lost()
+                        break
                 if result is not None:
                     break
                 if attempt < self.retries:
@@ -222,6 +243,17 @@ class ModbusClientManager:
             return result
         except ConnectionException:
             _LOGGER.warning("Modbus connection error during read")
+            await self._async_mark_connection_lost()
+            return None
+        except asyncio.CancelledError:
+            _LOGGER.debug("Modbus read cancelled")
+            return None
+        except ModbusException as err:
+            message = str(err).lower()
+            if "request cancelled outside pymodbus" in message or self._closing:
+                _LOGGER.debug("Modbus read cancelled while unloading")
+                return None
+            _LOGGER.warning("Modbus error during read: %s", err)
             await self._async_mark_connection_lost()
             return None
         except Exception:  # pylint: disable=broad-except
@@ -242,7 +274,7 @@ class ModbusClientManager:
                 if attempt > 0:
                     self._increment_retry_counter()
                     await self._async_mark_connection_lost()
-                    if not await self.async_ensure_connected():
+                    if not await self.async_ensure_connected(force=True):
                         if attempt < self.retries:
                             await asyncio.sleep(self.backoff * (attempt + 1))
                         continue
@@ -269,6 +301,14 @@ class ModbusClientManager:
                         result = None
                         await self._async_mark_connection_lost()
                         break
+                    except ModbusException as err:
+                        message = str(err).lower()
+                        if "request cancelled outside pymodbus" in message or self._closing:
+                            _LOGGER.debug("Modbus write cancelled while unloading")
+                            return False
+                        result = None
+                        await self._async_mark_connection_lost()
+                        break
                 if result is not None:
                     break
                 if attempt < self.retries:
@@ -285,6 +325,17 @@ class ModbusClientManager:
             return result is not None
         except ConnectionException:
             _LOGGER.warning("Modbus connection error during write")
+            await self._async_mark_connection_lost()
+            return False
+        except asyncio.CancelledError:
+            _LOGGER.debug("Modbus write cancelled")
+            return False
+        except ModbusException as err:
+            message = str(err).lower()
+            if "request cancelled outside pymodbus" in message or self._closing:
+                _LOGGER.debug("Modbus write cancelled while unloading")
+                return False
+            _LOGGER.warning("Modbus error during write: %s", err)
             await self._async_mark_connection_lost()
             return False
         except Exception:  # pylint: disable=broad-except
