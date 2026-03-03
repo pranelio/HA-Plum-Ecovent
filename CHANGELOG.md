@@ -5,6 +5,8 @@ All notable changes to this project are documented in this file.
 ## [0.4.3] - 2026-03-03
 ### Fixed
 - Fixed config-flow progress state transitions so setup no longer gets stuck and now reliably reaches successful entry creation.
+- Hardened Modbus TCP communication for noisy gateways by serializing requests and validating response unit/function before accepting payloads.
+- Added retry/reconnect handling for mismatched or cross-framed responses to avoid request/response desynchronization loops.
 
 ### Changed
 - Options flow entity selection now shows current values from coordinator data.

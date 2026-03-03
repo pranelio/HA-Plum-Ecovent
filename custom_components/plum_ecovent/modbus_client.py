@@ -51,6 +51,9 @@ class ModbusClientManager:
         self._retry_counter = 0
         self._closing = False
         self._connection_was_lost = False
+        self._io_lock = asyncio.Lock()
+        self.request_spacing = 0.03
+        self._last_io_time = 0.0
 
     @property
     def retry_counter(self) -> int:
@@ -182,168 +185,218 @@ class ModbusClientManager:
         return_error_response: bool = False,
     ) -> Any:
         """Read holding registers — returns pymodbus result or None."""
-        if not await self.async_ensure_connected():
-            _LOGGER.debug("No Modbus client available for read")
-            return None
-        try:
-            use_unit = self.unit if unit is None else unit
-            # some pymodbus versions expect `unit` keyword, others take it as
-            # positional argument or ignore it entirely.  try a sequence of
-            # combinations until one works.
-            result = None
-            for attempt in range(self.retries + 1):
-                if attempt > 0:
-                    self._increment_retry_counter()
-                    await self._async_mark_connection_lost()
-                    if not await self.async_ensure_connected(force=True):
-                        if attempt < self.retries:
-                            await asyncio.sleep(self.backoff * (attempt + 1))
-                        continue
-                for call in (
-                    lambda: self._client.read_holding_registers(address, count),
-                    lambda: self._client.read_holding_registers(address=address, count=count),
-                    lambda: self._client.read_holding_registers(address, count, use_unit),
-                    lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
-                    lambda: self._client.read_holding_registers(address=address, count=count, slave=use_unit),
-                    lambda: self._client.read_holding_registers(address),
-                ):
-                    try:
-                        result = call()
-                        if inspect.isawaitable(result):
-                            try:
-                                result = await asyncio.wait_for(result, timeout=self.timeout)
-                            except asyncio.CancelledError:
-                                _LOGGER.debug("Modbus read cancelled (likely due to unload)")
-                                return None
-                        break
-                    except TypeError:
-                        result = None
-                        continue
-                    except (ConnectionException, asyncio.TimeoutError):
-                        result = None
-                        await self._async_mark_connection_lost()
-                        break
-                    except ModbusException as err:
-                        message = str(err).lower()
-                        if "request cancelled outside pymodbus" in message or self._closing:
-                            _LOGGER.debug("Modbus read cancelled while unloading")
-                            return None
-                        result = None
-                        await self._async_mark_connection_lost()
-                        break
-                if result is not None:
-                    break
-                if attempt < self.retries:
-                    await asyncio.sleep(self.backoff * (attempt + 1))
-                else:
-                    _LOGGER.warning("Modbus read failed after retries for address %s", address)
-                    return None
-
-            # some pymodbus results expose isError()
-            if result is not None and hasattr(result, "isError") and callable(result.isError):
-                if result.isError():
-                    if return_error_response:
-                        return result
-                    _LOGGER.error("Modbus read returned error response for address %s", address)
-                    return None
-            return result
-        except ConnectionException:
-            _LOGGER.warning("Modbus connection error during read")
-            await self._async_mark_connection_lost()
-            return None
-        except asyncio.CancelledError:
-            _LOGGER.debug("Modbus read cancelled")
-            return None
-        except ModbusException as err:
-            message = str(err).lower()
-            if "request cancelled outside pymodbus" in message or self._closing:
-                _LOGGER.debug("Modbus read cancelled while unloading")
+        async with self._io_lock:
+            if not await self.async_ensure_connected():
+                _LOGGER.debug("No Modbus client available for read")
                 return None
-            _LOGGER.warning("Modbus error during read: %s", err)
-            await self._async_mark_connection_lost()
-            return None
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Error reading holding registers")
-            return None
+            try:
+                use_unit = self.unit if unit is None else unit
+                # some pymodbus versions expect `unit` keyword, others take it as
+                # positional argument or ignore it entirely.  try a sequence of
+                # combinations until one works.
+                result = None
+                for attempt in range(self.retries + 1):
+                    if attempt > 0:
+                        self._increment_retry_counter()
+                        await self._async_mark_connection_lost()
+                        if not await self.async_ensure_connected(force=True):
+                            if attempt < self.retries:
+                                await asyncio.sleep(self.backoff * (attempt + 1))
+                            continue
+                    for call in (
+                        lambda: self._client.read_holding_registers(address, count),
+                        lambda: self._client.read_holding_registers(address=address, count=count),
+                        lambda: self._client.read_holding_registers(address, count, use_unit),
+                        lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
+                        lambda: self._client.read_holding_registers(address=address, count=count, slave=use_unit),
+                        lambda: self._client.read_holding_registers(address),
+                    ):
+                        try:
+                            await self._async_wait_request_spacing()
+                            result = call()
+                            if inspect.isawaitable(result):
+                                try:
+                                    result = await asyncio.wait_for(result, timeout=self.timeout)
+                                except asyncio.CancelledError:
+                                    _LOGGER.debug("Modbus read cancelled (likely due to unload)")
+                                    return None
+                            break
+                        except TypeError:
+                            result = None
+                            continue
+                        except (ConnectionException, asyncio.TimeoutError):
+                            result = None
+                            await self._async_mark_connection_lost()
+                            break
+                        except ModbusException as err:
+                            message = str(err).lower()
+                            if "request cancelled outside pymodbus" in message or self._closing:
+                                _LOGGER.debug("Modbus read cancelled while unloading")
+                                return None
+                            result = None
+                            await self._async_mark_connection_lost()
+                            break
+
+                    if result is not None and not self._response_matches_expected(result, use_unit, expected_function=3):
+                        _LOGGER.warning(
+                            "Discarding Modbus response with unexpected unit/function for address %s; retrying",
+                            address,
+                        )
+                        result = None
+                        await self._async_mark_connection_lost()
+
+                    if result is not None:
+                        break
+                    if attempt < self.retries:
+                        await asyncio.sleep(self.backoff * (attempt + 1))
+                    else:
+                        _LOGGER.warning("Modbus read failed after retries for address %s", address)
+                        return None
+
+                # some pymodbus results expose isError()
+                if result is not None and hasattr(result, "isError") and callable(result.isError):
+                    if result.isError():
+                        if return_error_response:
+                            return result
+                        _LOGGER.error("Modbus read returned error response for address %s", address)
+                        return None
+                return result
+            except ConnectionException:
+                _LOGGER.warning("Modbus connection error during read")
+                await self._async_mark_connection_lost()
+                return None
+            except asyncio.CancelledError:
+                _LOGGER.debug("Modbus read cancelled")
+                return None
+            except ModbusException as err:
+                message = str(err).lower()
+                if "request cancelled outside pymodbus" in message or self._closing:
+                    _LOGGER.debug("Modbus read cancelled while unloading")
+                    return None
+                _LOGGER.warning("Modbus error during read: %s", err)
+                await self._async_mark_connection_lost()
+                return None
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Error reading holding registers")
+                return None
 
     async def write_register(
         self, address: int, value: int, unit: int | None = None
     ) -> bool:
         """Write single register. Returns True on success."""
-        if not await self.async_ensure_connected():
-            _LOGGER.debug("No Modbus client available for write")
-            return False
-        try:
-            use_unit = self.unit if unit is None else unit
-            result = None
-            for attempt in range(self.retries + 1):
-                if attempt > 0:
-                    self._increment_retry_counter()
-                    await self._async_mark_connection_lost()
-                    if not await self.async_ensure_connected(force=True):
-                        if attempt < self.retries:
-                            await asyncio.sleep(self.backoff * (attempt + 1))
-                        continue
-                for call in (
-                    lambda: self._client.write_register(address, value),
-                    lambda: self._client.write_register(address=address, value=value),
-                    lambda: self._client.write_register(address, value, use_unit),
-                    lambda: self._client.write_register(address=address, value=value, unit=use_unit),
-                    lambda: self._client.write_register(address=address, value=value, slave=use_unit),
-                ):
-                    try:
-                        result = call()
-                        if inspect.isawaitable(result):
-                            try:
-                                result = await asyncio.wait_for(result, timeout=self.timeout)
-                            except asyncio.CancelledError:
-                                _LOGGER.debug("Modbus write cancelled (likely due to unload)")
-                                return False
-                        break
-                    except TypeError:
-                        result = None
-                        continue
-                    except (ConnectionException, asyncio.TimeoutError):
-                        result = None
-                        await self._async_mark_connection_lost()
-                        break
-                    except ModbusException as err:
-                        message = str(err).lower()
-                        if "request cancelled outside pymodbus" in message or self._closing:
-                            _LOGGER.debug("Modbus write cancelled while unloading")
-                            return False
-                        result = None
-                        await self._async_mark_connection_lost()
-                        break
-                if result is not None:
-                    break
-                if attempt < self.retries:
-                    await asyncio.sleep(self.backoff * (attempt + 1))
-                else:
-                    _LOGGER.warning("Modbus write failed after retries for address %s", address)
-                    return False
-
-            if result is not None and hasattr(result, "isError") and callable(result.isError):
-                if result.isError():
-                    _LOGGER.error("Modbus write returned error response for address %s", address)
-                    return False
-
-            return result is not None
-        except ConnectionException:
-            _LOGGER.warning("Modbus connection error during write")
-            await self._async_mark_connection_lost()
-            return False
-        except asyncio.CancelledError:
-            _LOGGER.debug("Modbus write cancelled")
-            return False
-        except ModbusException as err:
-            message = str(err).lower()
-            if "request cancelled outside pymodbus" in message or self._closing:
-                _LOGGER.debug("Modbus write cancelled while unloading")
+        async with self._io_lock:
+            if not await self.async_ensure_connected():
+                _LOGGER.debug("No Modbus client available for write")
                 return False
-            _LOGGER.warning("Modbus error during write: %s", err)
-            await self._async_mark_connection_lost()
-            return False
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Error writing register")
-            return False
+            try:
+                use_unit = self.unit if unit is None else unit
+                result = None
+                for attempt in range(self.retries + 1):
+                    if attempt > 0:
+                        self._increment_retry_counter()
+                        await self._async_mark_connection_lost()
+                        if not await self.async_ensure_connected(force=True):
+                            if attempt < self.retries:
+                                await asyncio.sleep(self.backoff * (attempt + 1))
+                            continue
+                    for call in (
+                        lambda: self._client.write_register(address, value),
+                        lambda: self._client.write_register(address=address, value=value),
+                        lambda: self._client.write_register(address, value, use_unit),
+                        lambda: self._client.write_register(address=address, value=value, unit=use_unit),
+                        lambda: self._client.write_register(address=address, value=value, slave=use_unit),
+                    ):
+                        try:
+                            await self._async_wait_request_spacing()
+                            result = call()
+                            if inspect.isawaitable(result):
+                                try:
+                                    result = await asyncio.wait_for(result, timeout=self.timeout)
+                                except asyncio.CancelledError:
+                                    _LOGGER.debug("Modbus write cancelled (likely due to unload)")
+                                    return False
+                            break
+                        except TypeError:
+                            result = None
+                            continue
+                        except (ConnectionException, asyncio.TimeoutError):
+                            result = None
+                            await self._async_mark_connection_lost()
+                            break
+                        except ModbusException as err:
+                            message = str(err).lower()
+                            if "request cancelled outside pymodbus" in message or self._closing:
+                                _LOGGER.debug("Modbus write cancelled while unloading")
+                                return False
+                            result = None
+                            await self._async_mark_connection_lost()
+                            break
+
+                    if result is not None and not self._response_matches_expected(result, use_unit, expected_function=6):
+                        _LOGGER.warning(
+                            "Discarding Modbus write response with unexpected unit/function for address %s; retrying",
+                            address,
+                        )
+                        result = None
+                        await self._async_mark_connection_lost()
+
+                    if result is not None:
+                        break
+                    if attempt < self.retries:
+                        await asyncio.sleep(self.backoff * (attempt + 1))
+                    else:
+                        _LOGGER.warning("Modbus write failed after retries for address %s", address)
+                        return False
+
+                if result is not None and hasattr(result, "isError") and callable(result.isError):
+                    if result.isError():
+                        _LOGGER.error("Modbus write returned error response for address %s", address)
+                        return False
+
+                return result is not None
+            except ConnectionException:
+                _LOGGER.warning("Modbus connection error during write")
+                await self._async_mark_connection_lost()
+                return False
+            except asyncio.CancelledError:
+                _LOGGER.debug("Modbus write cancelled")
+                return False
+            except ModbusException as err:
+                message = str(err).lower()
+                if "request cancelled outside pymodbus" in message or self._closing:
+                    _LOGGER.debug("Modbus write cancelled while unloading")
+                    return False
+                _LOGGER.warning("Modbus error during write: %s", err)
+                await self._async_mark_connection_lost()
+                return False
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Error writing register")
+                return False
+
+    async def _async_wait_request_spacing(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self._last_io_time
+        if elapsed < self.request_spacing:
+            await asyncio.sleep(self.request_spacing - elapsed)
+        self._last_io_time = time.monotonic()
+
+    def _response_matches_expected(self, response: Any, expected_unit: int, expected_function: int) -> bool:
+        try:
+            response_unit = None
+            for attr_name in ("unit_id", "slave_id", "slave", "dev_id"):
+                attr_value = getattr(response, attr_name, None)
+                if attr_value is not None:
+                    response_unit = int(attr_value)
+                    break
+
+            if response_unit is not None and int(response_unit) != int(expected_unit):
+                return False
+
+            function_code = getattr(response, "function_code", None)
+            if function_code is not None:
+                function_code = int(function_code)
+                if function_code not in (expected_function, expected_function + 0x80):
+                    return False
+        except Exception:
+            return True
+        return True
