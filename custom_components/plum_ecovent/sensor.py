@@ -47,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         _LOGGER.warning("No discovered sensor definitions found for entry %s; no sensors will be created", entry.entry_id)
 
     entities = [PlumEcoventSensor(manager, coordinator, entry, d, idx, device_info=device_info) for idx, d in enumerate(sensors)]
+    entities.append(PlumEcoventRetryCounterSensor(manager, coordinator, entry, device_info=device_info))
     async_add_entities(entities, True)
 
 
@@ -100,4 +101,36 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         # Respect coordinator schedule; only force refresh if no interval set
         if self.coordinator and self.coordinator.update_interval is None:
             await self.coordinator.async_request_refresh()
+
+
+class PlumEcoventRetryCounterSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor exposing total Modbus retry attempts."""
+
+    def __init__(self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, device_info=None) -> None:
+        super().__init__(coordinator)
+        self._manager = manager
+        self._entry = entry
+        self._attr_name = f"{entry.title} Communication Retries"
+        self._attr_unique_id = f"{entry.entry_id}_diagnostic_comm_retries"
+        self._attr_icon = "mdi:counter"
+        try:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        except Exception:
+            self._attr_entity_category = "diagnostic"
+        if hasattr(SensorStateClass, "TOTAL_INCREASING"):
+            self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._device_info = device_info or {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": self._entry.title,
+            "manufacturer": "Plum",
+            "model": "Ecovent",
+        }
+
+    @property
+    def device_info(self):
+        return self._device_info
+
+    @property
+    def native_value(self):
+        return int(getattr(self._manager, "retry_counter", 0))
 

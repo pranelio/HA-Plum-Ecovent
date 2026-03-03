@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import inspect
 import asyncio
+import time
 from typing import Any
 
 try:
@@ -45,6 +46,43 @@ class ModbusClientManager:
         self.retries = 2
         self.backoff = 0.2
         self.timeout = 5.0
+        self.reconnect_interval = 10.0
+        self._last_reconnect_attempt = 0.0
+        self._retry_counter = 0
+
+    @property
+    def retry_counter(self) -> int:
+        """Total number of retry attempts performed after an initial failure."""
+        return self._retry_counter
+
+    def _increment_retry_counter(self) -> None:
+        self._retry_counter += 1
+
+    async def _async_mark_connection_lost(self) -> None:
+        """Mark current client connection as lost and close it."""
+        if self._client is None:
+            return
+        await self.async_close()
+        self._client = None
+
+    async def async_ensure_connected(self) -> bool:
+        """Ensure a live client connection exists.
+
+        Reconnect attempts are rate-limited to avoid tight loops when the
+        device is offline.
+        """
+        if self._client is not None:
+            return True
+
+        now = time.monotonic()
+        elapsed = now - self._last_reconnect_attempt
+        if elapsed < self.reconnect_interval:
+            return False
+
+        self._last_reconnect_attempt = now
+        self._increment_retry_counter()
+        _LOGGER.warning("Attempting Modbus reconnect after communication loss")
+        return await self.async_connect()
 
     async def async_connect(self) -> bool:
         """Create and connect the underlying pymodbus async client."""
@@ -127,7 +165,7 @@ class ModbusClientManager:
         self, address: int, count: int, unit: int | None = None
     ) -> Any:
         """Read holding registers — returns pymodbus result or None."""
-        if not self._client:
+        if not await self.async_ensure_connected():
             _LOGGER.debug("No Modbus client available for read")
             return None
         try:
@@ -137,6 +175,13 @@ class ModbusClientManager:
             # combinations until one works.
             result = None
             for attempt in range(self.retries + 1):
+                if attempt > 0:
+                    self._increment_retry_counter()
+                    await self._async_mark_connection_lost()
+                    if not await self.async_ensure_connected():
+                        if attempt < self.retries:
+                            await asyncio.sleep(self.backoff * (attempt + 1))
+                        continue
                 for call in (
                     lambda: self._client.read_holding_registers(address, count),
                     lambda: self._client.read_holding_registers(address=address, count=count),
@@ -159,6 +204,7 @@ class ModbusClientManager:
                         continue
                     except (ConnectionException, asyncio.TimeoutError):
                         result = None
+                        await self._async_mark_connection_lost()
                         break
                 if result is not None:
                     break
@@ -176,6 +222,7 @@ class ModbusClientManager:
             return result
         except ConnectionException:
             _LOGGER.warning("Modbus connection error during read")
+            await self._async_mark_connection_lost()
             return None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error reading holding registers")
@@ -185,13 +232,20 @@ class ModbusClientManager:
         self, address: int, value: int, unit: int | None = None
     ) -> bool:
         """Write single register. Returns True on success."""
-        if not self._client:
+        if not await self.async_ensure_connected():
             _LOGGER.debug("No Modbus client available for write")
             return False
         try:
             use_unit = self.unit if unit is None else unit
             result = None
             for attempt in range(self.retries + 1):
+                if attempt > 0:
+                    self._increment_retry_counter()
+                    await self._async_mark_connection_lost()
+                    if not await self.async_ensure_connected():
+                        if attempt < self.retries:
+                            await asyncio.sleep(self.backoff * (attempt + 1))
+                        continue
                 for call in (
                     lambda: self._client.write_register(address, value),
                     lambda: self._client.write_register(address=address, value=value),
@@ -213,6 +267,7 @@ class ModbusClientManager:
                         continue
                     except (ConnectionException, asyncio.TimeoutError):
                         result = None
+                        await self._async_mark_connection_lost()
                         break
                 if result is not None:
                     break
@@ -230,6 +285,7 @@ class ModbusClientManager:
             return result is not None
         except ConnectionException:
             _LOGGER.warning("Modbus connection error during write")
+            await self._async_mark_connection_lost()
             return False
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Error writing register")
