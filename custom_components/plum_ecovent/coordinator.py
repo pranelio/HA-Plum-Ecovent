@@ -56,7 +56,8 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _key(defn: Any) -> str:
-        return f"{defn.__class__.__name__}:{defn.address}:{defn.name}"
+        stable_key = getattr(defn, "key", None) or getattr(defn, "name", "unknown")
+        return f"{defn.__class__.__name__}:{defn.address}:{stable_key}"
 
     @staticmethod
     def _apply_filters(value: Any, filters: Any) -> Any:

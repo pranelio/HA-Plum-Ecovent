@@ -1,38 +1,85 @@
-# Plum Ecovent (Home Assistant Integration)
+# Plum Ecovent (Home Assistant custom integration)
 
-Home Assistant custom integration for Plum ecoVENT over Modbus TCP.
+Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integration exposes controller registers as standard Home Assistant entities (sensors, binary sensors, switches, numbers) with device registry support, configurable polling interval, and HACS-friendly packaging.
 
-It creates sensors, binary sensors, switches, and numbers for supported registers and keeps them updated with a coordinator.
+## Supported Devices
+- See the live compatibility list first: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
+- Includes tested units and likely-compatible families by vendor
+
+## Features
+- Modbus TCP client with robust signature fallbacks and connection-safe shutdown
+- Auto-created device and entities for key registers (temps, fans, filters, modes, setpoints)
+- Configurable polling interval (`update_rate`) and unit id
+- Unique IDs and entity categories for full UI management
 
 ## Installation
-
 ### HACS (recommended)
-1. Open HACS → **Integrations** → **Custom repositories**.
-2. Add this repository as type **Integration**.
-3. Install **Plum Ecovent**.
-4. Restart Home Assistant.
+1) In HACS, choose **Custom repositories** → add this repo as **Integration**.  
+2) Install **Plum Ecovent** from HACS.  
+3) Restart Home Assistant.
 
 ### Manual
-1. Copy `custom_components/plum_ecovent` to `/config/custom_components/plum_ecovent`.
-2. Restart Home Assistant.
+1) Copy `custom_components/plum_ecovent/` into `/config/custom_components/plum_ecovent/`.  
+2) Restart Home Assistant.
 
-## Setup
-1. Go to **Settings → Devices & Services → Add Integration**.
-2. Search for **Plum Ecovent**.
-3. Enter:
-   - **Host** (IP/DNS)
-   - **Port** (default `502`)
-   - **Unit ID** (default `1`)
-   - **Update rate** in seconds (default `30`)
-4. Finish setup.
+## Configuration
+1) Go to **Settings → Devices & Services → Add Integration** and search for *Plum Ecovent*.  
+2) Enter:
+   - Host/IP of the Modbus TCP endpoint (typically your RTU-to-TCP gateway)
+   - Port (default `502`)
+   - Unit ID (default `1`)
+   - Update rate in seconds (default `30`)
+3) A device is created with entities for sensors, binary sensors, switches, and numbers from `registers.py`.
 
-The integration reads static device metadata (firmware, serial, model) during setup and stores it in Home Assistant device info.
+### Options / Tuning
+- `update_rate`: coordinator polling interval (seconds). Set higher to reduce bus load; lower for faster updates.  
+- Edit `custom_components/plum_ecovent/registers.py` to add/remove registers or adjust metadata (units, categories, skip intervals, filters).
 
 ## Usage
-- Use created entities in dashboards and automations.
-- Use switch/number entities to control fan modes and setpoints.
-- Adjust options later from the integration page (for example `update_rate`, unit settings, optional entities).
+- Entities expose live values (e.g., CO2, temperatures, fan speeds) and controls (boost/auto, heater bits, numeric setpoints).  
+- Automations can react to entity state or call services to write registers via the switch/number entities.  
+- Availability reflects Modbus read/write health; connection issues log warnings.
 
-## Notes
-- Requires network reachability from Home Assistant to the ecoVENT Modbus TCP endpoint.
-- Connection or read/write issues are surfaced in entity availability and logs.
+### Service actions
+- `plum_ecovent.set_device_setting`: writes options-managed settings directly by key.
+
+Example automation action:
+```yaml
+action:
+   - service: plum_ecovent.set_device_setting
+      data:
+         setting: boost_duration
+         value: 15
+```
+
+If multiple Plum entries are loaded, include `entry_id` in the service data.
+
+## Requirements
+- Home Assistant Core / OS / Supervised with network access to the Ecovent.  
+- Modbus RTU-to-TCP adapter (gateway) for units that expose only RS485/RTU locally.
+- `pymodbus` is pulled automatically; ensure outbound TCP to the device port.
+
+## Troubleshooting
+- Duplicate unique_id warnings: reload the integration after updates so new IDs are applied.  
+- Connection errors: verify IP/port, unit ID, and firewall; increase `update_rate` if the bus is saturated.  
+- Signature/type errors: integration already falls back across pymodbus signatures; update to latest release if you still see them.
+- Unique ID migration (post-update): if entities remain ignored due to old IDs, remove the Plum Ecovent integration and re-add it, or delete the affected entries from **Settings → Devices & Services → Entities** (show disabled/hidden), then reload. The integration now appends an index to unique IDs to avoid collisions.
+
+## Removal
+1) Go to **Settings → Devices & Services**.
+2) Open **Plum Ecovent** and choose **Delete**.
+3) Confirm removal; entities and device entries from this integration are removed.
+4) Optionally delete `custom_components/plum_ecovent/` if you installed manually.
+
+## Disclaimer
+- You are responsible for safe installation, wiring, configuration, and operation of your ventilation system and any connected adapters/gateways.
+- This integration is provided as-is, and the authors/maintainers accept no liability for any damage, data loss, malfunction, or other consequences resulting from installation or use.
+
+## Contributing
+PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
+
+## Documentation
+- HVAC naming standard for future entity/control normalization: [docs/hvac_naming_conventions.md](docs/hvac_naming_conventions.md)
+- Supported and field-tested devices: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
+- Hardware connection guide (vendor-first, model pages can be added later): [docs/hardware_connection_guide.md](docs/hardware_connection_guide.md)
+

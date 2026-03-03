@@ -7,7 +7,15 @@ from homeassistant import config_entries
 import pytest
 
 from custom_components.plum_ecovent.config_flow import ConfigFlow
-from custom_components.plum_ecovent.const import CONF_HOST, CONF_PORT, CONF_UNIT, CONF_UPDATE_RATE
+from custom_components.plum_ecovent.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_UNIT,
+    CONF_UPDATE_RATE,
+    CONF_OPTIONAL_FORCE_ENABLE,
+    CONF_OPTIONAL_DISABLE,
+    CONF_RESPONDING_REGISTERS,
+)
 from homeassistant.const import CONF_NAME
 
 
@@ -27,8 +35,12 @@ async def test_tcp_flow(monkeypatch):
     async def _identity(_hass, _config):
         return {}
 
+    async def _probe(_hass, _config, retries=2):
+        return [201, 202]
+
     monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
     monkeypatch.setattr(cf, "_async_fetch_device_identity", _identity)
+    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe)
     # patch out hass-dependent helpers since we don't run under HA
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
@@ -51,20 +63,116 @@ async def test_tcp_flow(monkeypatch):
     assert result2["data"][CONF_HOST] == "1.2.3.4"
     assert result2["data"][CONF_PORT] == 502
     assert result2["data"][CONF_UNIT] == 17
+    assert result2["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
 
     # invalid port should return form with error
-    result3 = await flow.async_step_user(
+    result4 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1, CONF_UPDATE_RATE: 30}
     )
-    assert result3["type"] == "form"
-    assert result3["errors"][CONF_PORT] == "invalid_port"
+    assert result4["type"] == "form"
+    assert result4["errors"][CONF_PORT] == "invalid_port"
 
     # invalid unit should return form with error
-    result4 = await flow.async_step_user(
+    result5 = await flow.async_step_user(
         {CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0, CONF_UPDATE_RATE: 30}
     )
-    assert result4["type"] == "form"
-    assert result4["errors"][CONF_UNIT] == "invalid_unit"
+    assert result5["type"] == "form"
+    assert result5["errors"][CONF_UNIT] == "invalid_unit"
+
+
+@pytest.mark.asyncio
+async def test_tcp_flow_verify_adapter_connection_error(monkeypatch):
+    """Flow should surface adapter verification errors at verify step."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _refused_connection(host, port, timeout=5.0):
+        return "connection_refused"
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _refused_connection)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "verify_adapter"
+    assert result["errors"]["base"] == "connection_refused"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_code", ["connection_timeout", "invalid_host"])
+async def test_tcp_flow_verify_adapter_other_connection_errors(monkeypatch, error_code):
+    """Flow should expose timeout and invalid host errors at verify step."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _failing_connection(host, port, timeout=5.0):
+        return error_code
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _failing_connection)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "verify_adapter"
+    assert result["errors"]["base"] == error_code
+
+
+@pytest.mark.asyncio
+async def test_tcp_flow_probe_failed(monkeypatch):
+    """Flow should show probe_failed when no registers respond."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _ok_connection(host, port, timeout=5.0):
+        return None
+
+    async def _probe_none(_hass, _config, retries=2):
+        return []
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
+    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe_none)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    result = await flow.async_step_user(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "My",
+        }
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "probe_registers"
+    assert result["errors"]["base"] == "probe_failed"
 
 
 # additional helper test for setup_entry device registration
@@ -138,3 +246,106 @@ async def test_async_setup_entry_creates_device(monkeypatch):
     # ensure our dummy registry was used and received identifiers
     assert registry.created, "device registry not invoked"
     assert registry.created[0]["identifiers"] == {(DOMAIN, entry.entry_id)}
+
+
+@pytest.mark.asyncio
+async def test_options_flow_branching_connection(monkeypatch):
+    """Options flow should route to connection step and validate values."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _ok_connection(host, port, timeout=5.0):
+        return None
+
+    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
+
+    entry = SimpleNamespace(
+        data={
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        },
+        options={},
+    )
+    flow = OptionsFlowHandler(entry)
+
+    init_result = await flow.async_step_init()
+    assert init_result["type"] == "form"
+    assert init_result["step_id"] == "init"
+
+    route_result = await flow.async_step_init({"options_action": "connection"})
+    assert route_result["type"] == "form"
+    assert route_result["step_id"] == "connection"
+
+    invalid = await flow.async_step_connection(
+        {
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 70000,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        }
+    )
+    assert invalid["type"] == "form"
+    assert invalid["errors"][CONF_PORT] == "invalid_port"
+
+    valid = await flow.async_step_connection(
+        {
+            CONF_HOST: "10.0.0.2",
+            CONF_PORT: 502,
+            CONF_UNIT: 7,
+            CONF_UPDATE_RATE: 20,
+            CONF_NAME: "New Name",
+        }
+    )
+    assert valid["type"] == "create_entry"
+    assert valid["data"][CONF_HOST] == "10.0.0.2"
+    assert valid["data"][CONF_UNIT] == 7
+    assert valid["data"][CONF_NAME] == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_branching_entities(monkeypatch):
+    """Options flow should route to entities step and reject overlap."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+    import custom_components.plum_ecovent.config_flow as cf
+
+    monkeypatch.setattr(cf.OptionsFlowHandler, "_entity_choices", lambda self: {"sensor:82:co2": "sensor · CO2 (82)"})
+
+    entry = SimpleNamespace(
+        data={
+            CONF_HOST: "1.2.3.4",
+            CONF_PORT: 502,
+            CONF_UNIT: 1,
+            CONF_UPDATE_RATE: 30,
+            CONF_NAME: "Plum",
+        },
+        options={},
+    )
+    flow = OptionsFlowHandler(entry)
+
+    route_result = await flow.async_step_init({"options_action": "entities"})
+    assert route_result["type"] == "form"
+    assert route_result["step_id"] == "entities"
+
+    overlap = await flow.async_step_entities(
+        {
+            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:82:co2"],
+            CONF_OPTIONAL_DISABLE: ["sensor:82:co2"],
+        }
+    )
+    assert overlap["type"] == "form"
+    assert overlap["errors"]["base"] == "overlapping_optional_overrides"
+
+    valid = await flow.async_step_entities(
+        {
+            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:82:co2"],
+            CONF_OPTIONAL_DISABLE: [],
+        }
+    )
+    assert valid["type"] == "create_entry"
+    assert valid["data"][CONF_OPTIONAL_FORCE_ENABLE] == ["sensor:82:co2"]

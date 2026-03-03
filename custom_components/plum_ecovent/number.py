@@ -38,6 +38,7 @@ except Exception:  # Running outside Home Assistant for tests
 from .const import DOMAIN
 from .coordinator import build_definition_key
 from .modbus_client import ModbusClientManager
+from .registers import device_setting_addresses
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +46,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    entry_data = hass.data[DOMAIN][entry.entry_id]
+    entry_data = getattr(entry, "runtime_data", None)
+    if not isinstance(entry_data, dict):
+        entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
     device_info = entry_data.get("device_info")
@@ -54,14 +57,19 @@ async def async_setup_entry(
     if "number" not in discovered:
         _LOGGER.warning("No discovered number definitions found for entry %s; no numbers will be created", entry.entry_id)
 
+    managed_addresses = device_setting_addresses()
     entities = []
     for definition in numbers:
+        if int(definition.address) in managed_addresses:
+            continue
         entities.append(PlumEcoventNumber(manager, coordinator, entry, definition, device_info=device_info))
     async_add_entities(entities, True)
 
 
 class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
     """Number entity representing a register."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
@@ -71,7 +79,7 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
-        name_slug = definition.name.replace(" ", "_").lower()
+        name_slug = (getattr(definition, "key", None) or definition.name).replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_number_{definition.address}_{name_slug}"
         self._attr_native_value = 0

@@ -11,22 +11,35 @@
       "invalid_host": "Host name or IP address is invalid or cannot be resolved",
       "invalid_port": "Port must be between 1 and 65535",
       "invalid_unit": "Modbus Address must be between 1 and 247",
-      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds"
+      "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
+      "probe_failed": "Could not read any supported registers from the device"
     },
     "step": {
       "user": {
         "title": "Plum Ecovent setup",
-        "description": "Enter the TCP connection parameters for the Ecovent device.",
+        "description": "Step 1/3: Enter Modbus TCP adapter and polling parameters.",
         "data": {
           "host": "Host",
           "port": "Port",
           "unit": "Modbus Address",
           "update_rate": "Update interval (seconds)",
           "name": "Name"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Modbus TCP gateway.",
+          "port": "TCP port exposed by the gateway (default 502).",
+          "unit": "Modbus slave address of the ventilation controller.",
+          "update_rate": "Polling interval in seconds.",
+          "name": "Display name for the Home Assistant device."
         }
       },
-      "modbus_tcp": {
-        "title": "Modbus TCP settings"
+      "verify_adapter": {
+        "title": "Verify adapter",
+        "description": "Step 2/3: Validating TCP reachability for {host}:{port}."
+      },
+      "probe_registers": {
+        "title": "Probe device registers",
+        "description": "Step 3/3: Probing available device registers."
       }
     }
   },
@@ -39,19 +52,68 @@
       "invalid_port": "Port must be between 1 and 65535",
       "invalid_unit": "Modbus Address must be between 1 and 247",
       "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
+      "invalid_device_setting": "One or more values are outside allowed ranges",
       "overlapping_optional_overrides": "An optional entity cannot be both force-enabled and disabled"
     },
     "step": {
       "init": {
         "title": "Plum Ecovent options",
+        "description": "Choose what you want to change.",
+        "data": {
+          "options_action": "Action",
+          "connection": "Connection and update settings",
+          "entities": "Entity reporting",
+          "device_settings": "Device settings"
+        }
+      },
+      "connection": {
+        "title": "Connection and update settings",
         "data": {
           "host": "Host",
           "port": "Port",
           "name": "Name",
           "update_rate": "Update interval (seconds)",
-          "unit": "Modbus Address",
-          "optional_force_enable": "Optional entities to enable",
-          "optional_disable": "Optional entities to disable"
+          "unit": "Modbus Address"
+        }
+      },
+      "entities": {
+        "title": "Entity reporting",
+        "description": "Choose entities to always include, or hide from Home Assistant.",
+        "data": {
+          "optional_force_enable": "Entities to force include",
+          "optional_disable": "Entities to disable"
+        }
+      },
+      "device_settings": {
+        "title": "Device Settings",
+        "description": "Select a settings section.",
+        "data": {
+          "device_settings_group": "Settings section",
+          "supply_fan": "Supply fan speeds",
+          "exhaust_fan": "Extract fan speeds",
+          "auto_control": "Auto control",
+          "boost": "Boost settings",
+          "temperature": "Temperature settings"
+        }
+      },
+      "device_settings_group": {
+        "title": "Device Settings: {group_name}",
+        "data": {
+          "supply_fan_speed_g1": "Supply Fan Speed Stage 1",
+          "supply_fan_speed_g2": "Supply Fan Speed Stage 2",
+          "supply_fan_speed_g3": "Supply Fan Speed Stage 3",
+          "exhaust_fan_speed_g1": "Extract Fan Speed Stage 1",
+          "exhaust_fan_speed_g2": "Extract Fan Speed Stage 2",
+          "exhaust_fan_speed_g3": "Extract Fan Speed Stage 3",
+          "auto_minimum_fan_speed": "Auto Mode Minimum Fan Speed",
+          "auto_maximum_fan_speed": "Auto Mode Maximum Fan Speed",
+          "boost_supply_speed": "Boost 1 Supply Fan Speed",
+          "boost_extract_speed": "Boost 1 Extract Fan Speed",
+          "boost_duration": "Boost 1 Duration",
+          "comfort_temperature_day": "Comfort Temperature (Day)",
+          "comfort_temperature_night": "Comfort Temperature (Night)",
+          "winter_mode_activation_temperature": "Winter Activation Temperature",
+          "summer_mode_activation_temperature": "Summer Activation Temperature"
         }
       }
     }

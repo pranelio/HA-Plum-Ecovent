@@ -2,17 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.3.2] - 2026-03-03
-### Changed
-- Iteration version bump to `0.3.2` for development branch updates.
+## [0.4.0] - 2026-03-03
+### Added
+- Added local integration brand assets under `custom_components/plum_ecovent/brand/`:
+	`icon.png`, `icon@2x.png`, `logo.png`, `logo@2x.png`, `dark_logo.png`, `dark_logo@2x.png`.
 
-## [0.3.1] - 2026-03-03
 ### Changed
-- Bumped integration version to `0.3.1` in `manifest.json` and `const.py`.
+- Updated integration version references to `0.4.0` in `manifest.json` and `const.py`.
+- Aligned integration brand metadata to `plum_ecovent` for local brand asset resolution.
+- Prepared release tag target `0.4.0` on `dev` branch.
+- Refactored options flow to branch by task (`connection`, `optional entities`, and new `Device Settings`).
+- Added grouped `Device Settings` sections for supply fan, exhaust fan, auto control, boost, and temperature values.
+- Reduced device-page clutter by moving configurable number registers to options/services management instead of per-setting number entities.
+- Redesigned initial setup into staged validation and discovery: adapter settings, reachability verification, then full register probing.
+- Persisted discovered responding registers in config entry data and used them as the primary runtime discovery source.
+- Replaced optional-only discovery behavior with unified entity selection across all definitions, with include/disable overrides applied consistently.
+- Updated options flow entity management labels and behavior to reflect scanned entities rather than optional-only entities.
 
-### Fixed
-- Corrected negative temperature decoding by treating Modbus temperature-class registers as signed 16-bit values before scaling.
-- Eliminated invalid large positive readings like `6552.9°C` for actual negative temperatures (for example `-0.8°C`).
+### Added
+- Added `plum_ecovent.set_device_setting` service for automation-friendly writes to options-managed device settings.
+- Added `custom_components/plum_ecovent/services.yaml` service descriptions.
 
 ## [0.3.0-b1] - 2026-03-02
 ### Added

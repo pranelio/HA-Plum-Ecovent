@@ -2,14 +2,6 @@
 
 Current backlog for the integration.
 
-## Required fixes (from quality audit)
-- [x] Fix options flow registration so Home Assistant reliably exposes integration options (`ConfigFlow.async_get_options_flow`).
-- [x] Make number writes fail-safe: only update optimistic value after successful Modbus write, and surface write failures.
-- [x] Make switch command state fail-safe: do not set local on/off state when write fails; rely on coordinator refresh/result.
-- [x] Harden setup compatibility for tests/stubs by safely merging config with missing `entry.options`.
-- [x] Update tests to match current behavior:
-	- config flow tests must mock reachability validation (`_async_test_connection`),
-	- switch tests must assert bitmask-preserving register writes (not forced `1/0`).
 
 ## Next up (quality/tooling)
 - [ ] Add a GitHub Actions workflow for `pytest`, `ruff`, and `mypy`.
@@ -18,6 +10,38 @@ Current backlog for the integration.
 - [ ] Add more granular unit tests per platform (`sensor`, `binary_sensor`, `switch`, `number`) and consider hardware-in-the-loop tests.
 - [ ] Extend docs with more automation examples and screenshots.
 - [ ] Provide a small CLI utility to read/write registers outside Home Assistant.
+
+## Home Assistant quality scale roadmap (self-assessed)
+
+Current estimate: **Bronze reached (self-assessed)**.
+
+### Bronze milestone (reached)
+- [x] Add `custom_components/plum_ecovent/quality_scale.yaml` and track each rule + exemptions.
+- [x] Migrate runtime storage from `hass.data[DOMAIN][entry_id]` to `ConfigEntry.runtime_data`.
+- [x] Set `has_entity_name = True` consistently for all entity platforms.
+- [x] Ensure config-flow field help text uses `data_description` style context where applicable.
+- [x] Keep config-flow coverage comprehensive for all happy/failure paths and uniqueness checks.
+
+### Silver milestone (not reached)
+- [ ] Increase measured overall integration coverage to >95% and keep it enforced in CI.
+- [ ] Define `PARALLEL_UPDATES` per platform to control concurrent updates.
+- [ ] Improve availability logging to log once on disconnect and once on recovery (avoid log spam).
+- [ ] Verify/document reauth rule exemption (no authentication flow for local Modbus device).
+- [ ] Expand docs with explicit installation/configuration parameter reference.
+
+### Gold milestone (not reached)
+- [ ] Add entity translation keys for names (and icon translations where relevant).
+- [ ] Add `entity_disabled_by_default` for noisy/less-used entities.
+- [ ] Add reconfigure flow and repair issue guidance where user intervention is required.
+- [ ] Expand end-user docs: supported functions/entities matrix, update behavior details, use-cases, automation examples.
+- [ ] Evaluate device discovery feasibility (DHCP/zeroconf/manual import) and document exemptions if not technically possible.
+- [ ] Create an ESPHome device blueprint/example that can expose zeroconf discovery and connection-state presence to simplify integration setup.
+
+### Platinum milestone (not reached)
+- [ ] Move toward strict typing across integration modules and tests (mypy strict target).
+- [ ] Validate all dependencies and I/O paths are fully async and efficient under load.
+- [ ] Benchmark and optimize polling/data handling to reduce network and CPU usage.
+- [ ] Document any Platinum rule exemptions (for non-HTTP integrations, e.g., websession injection not applicable).
 
 ## Feature roadmap
 - [ ] Implement registers for alarms.

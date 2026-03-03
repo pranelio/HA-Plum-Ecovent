@@ -36,7 +36,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    entry_data = hass.data[DOMAIN][entry.entry_id]
+    entry_data = getattr(entry, "runtime_data", None)
+    if not isinstance(entry_data, dict):
+        entry_data = hass.data[DOMAIN][entry.entry_id]
     manager: ModbusClientManager = entry_data["manager"]
     coordinator = entry_data["coordinator"]
     device_info = entry_data.get("device_info")
@@ -54,6 +56,8 @@ async def async_setup_entry(
 class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor that reads a particular Modbus register."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self, manager: ModbusClientManager, coordinator, entry: ConfigEntry, definition, device_info=None
     ) -> None:
@@ -62,7 +66,7 @@ class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._entry = entry
         self._definition = definition
         self._key = build_definition_key(definition)
-        name_slug = definition.name.replace(" ", "_").lower()
+        name_slug = (getattr(definition, "key", None) or definition.name).replace(" ", "_").lower()
         self._attr_name = f"{entry.title} {definition.name}"
         self._attr_unique_id = f"{entry.entry_id}_binary_{definition.address}_{name_slug}"
         self._attr_is_on = False
