@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2] - 2026-03-03
+### Changed
+- Iteration version bump to `0.3.2` for development branch updates.
+
 ## [0.3.0-b1] - 2026-03-02
 ### Added
 - Diagnostics support via `diagnostics.py` for safer support troubleshooting.

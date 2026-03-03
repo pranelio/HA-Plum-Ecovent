@@ -1,12 +1,12 @@
 {
   "domain": "plum_ecovent",
   "name": "Plum ecoVENT",
-  "version": "v0.3.0",
+  "version": "0.3.2",
   "documentation": "https://github.com/pranelio/HA-Plum-Ecovent",
   "brand": "plum_ecomax",
   "iot_class": "local_polling",
   "requirements": [
-    "pymodbus>=2.5.2"
+    "pymodbus>=3.10.0"
   ],
   "dependencies": [],
   "codeowners": ["@pranelio"],

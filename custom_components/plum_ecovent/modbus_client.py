@@ -82,7 +82,7 @@ class ModbusClientManager:
             if AsyncModbusTcpClient is None:
                 _LOGGER.error(
                     "pymodbus asynchronous client class not found; tried %s. "
-                    "Ensure pymodbus>=2.5 is installed in the Home Assistant "
+                    "Ensure pymodbus>=3.10.0 is installed in the Home Assistant "
                     "environment",
                     tried,
                 )
@@ -142,6 +142,7 @@ class ModbusClientManager:
                     lambda: self._client.read_holding_registers(address=address, count=count),
                     lambda: self._client.read_holding_registers(address, count, use_unit),
                     lambda: self._client.read_holding_registers(address=address, count=count, unit=use_unit),
+                    lambda: self._client.read_holding_registers(address=address, count=count, slave=use_unit),
                     lambda: self._client.read_holding_registers(address),
                 ):
                     try:
@@ -196,6 +197,7 @@ class ModbusClientManager:
                     lambda: self._client.write_register(address=address, value=value),
                     lambda: self._client.write_register(address, value, use_unit),
                     lambda: self._client.write_register(address=address, value=value, unit=use_unit),
+                    lambda: self._client.write_register(address=address, value=value, slave=use_unit),
                 ):
                     try:
                         result = call()

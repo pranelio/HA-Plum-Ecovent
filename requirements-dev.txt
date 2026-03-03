@@ -4,4 +4,4 @@ pytest-homeassistant-custom-component
 homeassistant
 homeassistant-stubs
 voluptuous
-pymodbus
+pymodbus>=3.10.0
