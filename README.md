@@ -49,6 +49,10 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 ## Contributing
 PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
 
+## Documentation
+- HVAC naming standard for future entity/control normalization: [docs/hvac_naming_conventions.md](docs/hvac_naming_conventions.md)
+- Supported and field-tested devices: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
+
 ## Release Process
 Use the release checklist in `RELEASE.md` for every release.
 
