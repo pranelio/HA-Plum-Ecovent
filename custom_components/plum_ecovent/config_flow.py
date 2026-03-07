@@ -5,15 +5,18 @@ import asyncio
 import contextlib
 import logging
 import socket
+import time
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_AVAILABLE_REGISTERS,
+    CONF_CONNECTION_TYPE,
     CONF_DEVICE_INFO_FETCH_ATTEMPTED,
     CONF_DEVICE_INFO_PENDING_FETCH,
     CONF_DEVICE_NAME,
@@ -21,12 +24,17 @@ from .const import (
     CONF_DEVICE_SETTINGS_GROUP,
     CONF_DEVICE_SETTINGS_VALUES,
     CONF_FIRMWARE_VERSION,
+    CONF_NON_RESPONDING_REGISTERS,
     CONF_OPTIONS_ACTION,
     CONF_OPTIONAL_DISABLE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_RESPONDING_REGISTERS,
     CONF_UNIT,
+    CONF_UNSUPPORTED_REGISTERS,
     CONF_UPDATE_RATE,
+    CONNECTION_TYPE_RTU,
+    CONNECTION_TYPE_TCP,
+    DEFAULT_NAME,
     DEFAULT_UPDATE_RATE,
     DOMAIN,
 )
@@ -46,20 +54,50 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._local_tasks: dict[str, asyncio.Task[Any]] = {}
         self._local_state: dict[str, Any] = {}
-        self._schema = vol.Schema(
+        self._protocol_schema = vol.Schema(
+            {
+                vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPE_TCP): vol.In(
+                    {
+                        CONNECTION_TYPE_TCP: "Modbus TCP",
+                        CONNECTION_TYPE_RTU: "Modbus RTU (not implemented)",
+                    }
+                )
+            }
+        )
+        self._tcp_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=""): str,
                 vol.Required(CONF_PORT, default=502): vol.All(vol.Coerce(int)),
                 vol.Required(CONF_UNIT, default=1): vol.All(vol.Coerce(int)),
-                vol.Required(CONF_UPDATE_RATE, default=DEFAULT_UPDATE_RATE): vol.All(vol.Coerce(int)),
-                vol.Optional(CONF_NAME, default="Plum Ecovent"): str,
             }
         )
 
     async def async_step_user(self, user_input=None):
-        """Step 1: ask adapter IP/port/unit and integration name."""
+        """Step 1: ask for connection type."""
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=self._schema)
+            return self.async_show_form(step_id="user", data_schema=self._protocol_schema)
+
+        connection_type = user_input.get(CONF_CONNECTION_TYPE)
+        if connection_type == CONNECTION_TYPE_RTU:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=self._protocol_schema,
+                errors={"base": "rtu_not_supported"},
+            )
+        if connection_type != CONNECTION_TYPE_TCP:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=self._protocol_schema,
+                errors={CONF_CONNECTION_TYPE: "invalid_connection_type"},
+            )
+
+        self._data[CONF_CONNECTION_TYPE] = CONNECTION_TYPE_TCP
+        return await self.async_step_tcp()
+
+    async def async_step_tcp(self, user_input=None):
+        """Step 2: collect Modbus TCP connection parameters."""
+        if user_input is None:
+            return self.async_show_form(step_id="tcp", data_schema=self._tcp_schema)
 
         self._clear_progress_tasks()
         self._clear_progress_state()
@@ -67,7 +105,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data.update(user_input)
         errors = self._validate_inputs(self._data)
         if errors:
-            return self.async_show_form(step_id="user", data_schema=self._schema, errors=errors)
+            return self.async_show_form(step_id="tcp", data_schema=self._tcp_schema, errors=errors)
 
         host = self._data.get(CONF_HOST)
         port = self._data.get(CONF_PORT)
@@ -83,14 +121,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = self._data.get(CONF_HOST)
         port = self._data.get(CONF_PORT)
         if not host or port is None:
-            return await self.async_step_user()
+            return await self.async_step_tcp()
 
         if self._get_state("verify_done", False):
             return self.async_show_progress_done(next_step_id="verify_adapter_result")
 
         verify_task = self._get_task("verify")
         if verify_task is None:
-            verify_task = asyncio.create_task(_async_test_connection(str(host), int(port)))
+            verify_task = asyncio.create_task(_async_validate_modbus_connection(self.hass, self._data))
             self._set_task("verify", verify_task)
 
         if not verify_task.done():
@@ -155,7 +193,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._set_state("probe_result", await probe_task)
         except Exception:
             _LOGGER.exception("Register probe failed unexpectedly")
-            self._set_state("probe_result", ([], {}))
+            self._set_state(
+                "probe_result",
+                ({"available": [], "non_responding": [], "unsupported": []}, {}),
+            )
 
         self._set_state("probe_done", True)
 
@@ -163,19 +204,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_probe_registers_result(self, user_input=None):
         """Handle result from register probing progress step."""
-        probe_result = self._get_state("probe_result", ([], {}))
+        probe_result = self._get_state(
+            "probe_result",
+            ({"available": [], "non_responding": [], "unsupported": []}, {}),
+        )
         self._set_state("probe_result", None)
         self._set_state("probe_done", False)
-        responding, identity = probe_result
+        register_support, identity = probe_result
+        available = sorted(register_support.get("available", []))
+        non_responding = sorted(register_support.get("non_responding", []))
+        unsupported = sorted(register_support.get("unsupported", []))
 
-        if not responding:
+        if not available:
             return self.async_show_form(
                 step_id="probe_registers",
                 data_schema=vol.Schema({}),
                 errors={"base": "probe_failed"},
             )
 
-        self._data[CONF_RESPONDING_REGISTERS] = sorted(responding)
+        self._data[CONF_AVAILABLE_REGISTERS] = available
+        self._data[CONF_NON_RESPONDING_REGISTERS] = non_responding
+        self._data[CONF_UNSUPPORTED_REGISTERS] = unsupported
+        self._data[CONF_RESPONDING_REGISTERS] = available
 
         if identity:
             self._data.update(identity)
@@ -185,16 +235,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data[CONF_DEVICE_INFO_PENDING_FETCH] = True
             self._data[CONF_DEVICE_INFO_FETCH_ATTEMPTED] = False
 
-        title = self._data.get(CONF_NAME, "Plum Ecovent")
+        title = DEFAULT_NAME
         return self.async_create_entry(title=title, data=self._data)
 
-    async def _async_probe_and_fetch_identity(self) -> tuple[list[int], dict[str, str]]:
+    async def _async_probe_and_fetch_identity(self) -> tuple[dict[str, list[int]], dict[str, str]]:
         """Run long probe/identity operations in a tracked task for progress UI."""
-        responding = await _async_probe_responding_registers(self.hass, self._data, retries=1)
+        register_support = await asyncio.wait_for(
+            _async_probe_register_capabilities(
+                self.hass,
+                self._data,
+                max_attempts=3,
+                deadline_seconds=45.0,
+            ),
+            timeout=50.0,
+        )
         identity: dict[str, str] = {}
-        if responding:
+        if register_support.get("available"):
             identity = await _async_fetch_device_identity(self.hass, self._data)
-        return responding, identity
+        return register_support, identity
 
     def _validate_inputs(self, data: dict[str, Any]) -> dict[str, str]:
         errors: dict[str, str] = {}
@@ -204,9 +262,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         unit = data.get(CONF_UNIT)
         if unit is None or not (1 <= int(unit) <= 247):
             errors[CONF_UNIT] = "invalid_unit"
-        update_rate = data.get(CONF_UPDATE_RATE)
-        if update_rate is None or not (1 <= int(update_rate) <= 3600):
-            errors[CONF_UPDATE_RATE] = "invalid_update_rate"
         return errors
 
     def _task_bucket(self) -> dict[str, asyncio.Task[Any]]:
@@ -320,7 +375,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     CONF_HOST: host,
                     CONF_PORT: int(port),
-                    CONF_NAME: user_input.get(CONF_NAME, "Plum Ecovent"),
                     CONF_UPDATE_RATE: int(rate),
                     CONF_UNIT: int(unit),
                 }
@@ -457,31 +511,108 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             {
                 vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): str,
                 vol.Required(CONF_PORT, default=current.get(CONF_PORT, 502)): vol.All(vol.Coerce(int)),
-                vol.Required(CONF_NAME, default=current.get(CONF_NAME, "Plum Ecovent")): str,
                 vol.Required(CONF_UPDATE_RATE, default=current.get(CONF_UPDATE_RATE, DEFAULT_UPDATE_RATE)): vol.All(vol.Coerce(int)),
                 vol.Required(CONF_UNIT, default=current.get(CONF_UNIT, 1)): vol.All(vol.Coerce(int)),
             }
         )
 
     def _entity_choices(self) -> dict[str, str]:
-        from .registers import entity_catalog
+        from .registers import device_setting_addresses, entity_catalog
 
         base_catalog = entity_catalog()
+        managed_setting_addresses = set(device_setting_addresses())
+
+        filtered_catalog = {
+            entity_id: label
+            for entity_id, label in base_catalog.items()
+            if not self._is_options_managed_entity(entity_id, managed_setting_addresses)
+        }
+
+        discovered_ids = self._discovered_entity_ids()
+        if discovered_ids is not None:
+            filtered_catalog = {
+                entity_id: label
+                for entity_id, label in filtered_catalog.items()
+                if entity_id in discovered_ids
+            }
+
+        current = self._current()
+        preserved_overrides = set(current.get(CONF_OPTIONAL_FORCE_ENABLE, []) or []) | set(
+            current.get(CONF_OPTIONAL_DISABLE, []) or []
+        )
+        for entity_id in sorted(preserved_overrides):
+            if entity_id in filtered_catalog:
+                continue
+            if self._is_options_managed_entity(entity_id, managed_setting_addresses):
+                continue
+            fallback_label = base_catalog.get(entity_id, entity_id)
+            filtered_catalog[entity_id] = f"{fallback_label} [current: unavailable]"
+
         runtime_data = self._runtime_data()
         coordinator = runtime_data.get("coordinator") if isinstance(runtime_data, dict) else None
         values = getattr(coordinator, "data", {}) if coordinator is not None else {}
 
         if not isinstance(values, dict) or not values:
-            return base_catalog
+            return filtered_catalog
 
         enriched: dict[str, str] = {}
-        for entity_id, label in base_catalog.items():
+        for entity_id, label in filtered_catalog.items():
             current_value = self._current_value_for_entity_id(entity_id, values)
             if current_value is None:
                 enriched[entity_id] = f"{label} [current: unavailable]"
             else:
                 enriched[entity_id] = f"{label} [current: {current_value}]"
         return enriched
+
+    def _discovered_entity_ids(self) -> set[str] | None:
+        runtime_data = self._runtime_data()
+        discovered_entities = runtime_data.get("discovered_entities") if isinstance(runtime_data, dict) else None
+        if isinstance(discovered_entities, dict):
+            combined: set[str] = set()
+            for values in discovered_entities.values():
+                if isinstance(values, list):
+                    combined.update(str(value) for value in values)
+            return combined
+
+        current = self._current()
+        available = current.get(CONF_AVAILABLE_REGISTERS, current.get(CONF_RESPONDING_REGISTERS, None))
+        if isinstance(available, list):
+            available_addresses: set[int] = set()
+            for value in available:
+                try:
+                    available_addresses.add(int(value))
+                except (TypeError, ValueError):
+                    continue
+            catalog = self._raw_entity_catalog()
+            discovered: set[str] = set()
+            for entity_id in catalog:
+                _, address = self._parse_entity_id(entity_id)
+                if address is not None and address in available_addresses:
+                    discovered.add(entity_id)
+            return discovered
+        return None
+
+    def _raw_entity_catalog(self) -> dict[str, str]:
+        from .registers import entity_catalog
+
+        return entity_catalog()
+
+    def _is_options_managed_entity(self, entity_id: str, managed_setting_addresses: set[int]) -> bool:
+        platform, address = self._parse_entity_id(entity_id)
+        if platform != "number" or address is None:
+            return False
+        return int(address) in managed_setting_addresses
+
+    def _parse_entity_id(self, entity_id: str) -> tuple[str | None, int | None]:
+        parts = entity_id.split(":", 2)
+        if len(parts) != 3:
+            return None, None
+        platform = parts[0]
+        try:
+            address = int(parts[1])
+        except ValueError:
+            return platform, None
+        return platform, address
 
     def _runtime_data(self) -> dict[str, Any]:
         runtime_data = getattr(self._entry, "runtime_data", None)
@@ -613,32 +744,71 @@ async def async_get_options_flow(entry: config_entries.ConfigEntry):
     return OptionsFlowHandler(entry)
 
 
-async def _async_probe_responding_registers(hass, config: dict, retries: int = 2) -> list[int]:
-    """Probe all defined register addresses and return those that respond."""
+async def _async_probe_register_capabilities(
+    hass,
+    config: dict,
+    max_attempts: int = 3,
+    deadline_seconds: float = 45.0,
+) -> dict[str, list[int]]:
+    """Probe defined registers and classify register availability/support."""
     manager = ModbusClientManager(hass, config)
     manager.retries = 0
     manager.backoff = 0.05
     manager.timeout = 1.5
     connected = await manager.async_connect()
     if not connected:
-        return []
+        return {"available": [], "non_responding": [], "unsupported": []}
 
     try:
         addresses = _all_defined_addresses()
-        responding: list[int] = []
-        for address in addresses:
-            success = False
-            for _ in range(retries + 1):
+        available: set[int] = set()
+        unsupported: set[int] = set()
+        pending_non_responding: set[int] = set(addresses)
+        started_at = time.monotonic()
+
+        attempts = max(1, int(max_attempts))
+        for _ in range(attempts):
+            if not pending_non_responding:
+                break
+            elapsed = time.monotonic() - started_at
+            if elapsed >= float(deadline_seconds):
+                _LOGGER.warning(
+                    "Register capability probe stopped at deadline %.1fs; unresolved non-responding registers=%s",
+                    float(deadline_seconds),
+                    len(pending_non_responding),
+                )
+                break
+
+            next_pending: set[int] = set()
+            for address in sorted(pending_non_responding):
+                elapsed = time.monotonic() - started_at
+                if elapsed >= float(deadline_seconds):
+                    next_pending.add(address)
+                    continue
                 response = await manager.read_holding_registers(address, 1, return_error_response=True)
-                if _is_illegal_data_response(response):
-                    break
-                if response is not None and hasattr(response, "registers"):
-                    success = True
-                    break
-            if success:
-                responding.append(address)
-        return sorted(set(responding))
+                classification = _classify_probe_response(response)
+                if classification == "available":
+                    available.add(address)
+                    continue
+                if classification == "unsupported":
+                    unsupported.add(address)
+                    continue
+                next_pending.add(address)
+
+            pending_non_responding = next_pending
+
+        return {
+            "available": sorted(available),
+            "non_responding": sorted(pending_non_responding),
+            "unsupported": sorted(unsupported),
+        }
     finally:
+        _LOGGER.info(
+            "Register capability probe summary: available=%s unsupported=%s non_responding=%s",
+            len(available) if "available" in locals() else 0,
+            len(unsupported) if "unsupported" in locals() else 0,
+            len(pending_non_responding) if "pending_non_responding" in locals() else 0,
+        )
         await manager.async_close()
 
 
@@ -651,23 +821,25 @@ def _all_defined_addresses() -> list[int]:
     return sorted(addresses)
 
 
-def _is_illegal_data_response(response: Any) -> bool:
-    """Return True when Modbus replied with illegal address/value style exception."""
+def _classify_probe_response(response: Any) -> str:
+    """Classify Modbus probe response as available, unsupported, or non_responding."""
     if response is None:
-        return False
+        return "non_responding"
     is_error = getattr(response, "isError", None)
     try:
         if callable(is_error) and not is_error():
-            return False
+            return "available" if hasattr(response, "registers") else "non_responding"
     except Exception:
-        return False
+        return "non_responding"
 
     exception_code = getattr(response, "exception_code", None)
-    if exception_code in (2, 3):
-        return True
+    if exception_code in (1, 2, 3):
+        return "unsupported"
 
     message = str(response).lower()
-    return "illegal" in message and ("address" in message or "data" in message or "value" in message)
+    if "illegal" in message and ("address" in message or "data" in message or "value" in message or "function" in message):
+        return "unsupported"
+    return "non_responding"
 
 
 async def _async_fetch_device_identity(hass, config: dict) -> dict[str, str]:
@@ -719,6 +891,64 @@ async def _async_write_device_settings(hass, config: dict, values_by_address: di
             if not success:
                 return False
         return True
+    finally:
+        await manager.async_close()
+
+
+async def _async_validate_modbus_connection(
+    hass,
+    config: dict,
+    retries: int = 2,
+    backoff: float = 0.2,
+) -> str | None:
+    """Validate TCP reachability plus Modbus-level responsiveness.
+
+    Returns translated error keys, or None when validation is successful.
+    """
+    host = str(config.get(CONF_HOST, "") or "")
+    try:
+        port = int(config.get(CONF_PORT, 0))
+    except (TypeError, ValueError):
+        return "invalid_port"
+
+    reachability_error = await _async_test_connection(host, port)
+    if reachability_error is not None:
+        return reachability_error
+
+    manager = ModbusClientManager(hass, config)
+    manager.retries = 0
+    manager.backoff = 0.05
+    manager.timeout = 1.5
+
+    connected = await manager.async_connect()
+    if not connected:
+        return "cannot_connect"
+
+    try:
+        probe_addresses = [16, *_all_defined_addresses()[:3]]
+        attempts = max(1, int(retries) + 1)
+
+        for attempt in range(attempts):
+            for address in probe_addresses:
+                response = await manager.read_holding_registers(address, 1, return_error_response=True)
+                if response is None:
+                    continue
+
+                has_register_payload = hasattr(response, "registers")
+                if has_register_payload:
+                    return None
+
+                is_error = getattr(response, "isError", None)
+                try:
+                    if callable(is_error) and is_error():
+                        return None
+                except Exception:
+                    continue
+
+            if attempt < attempts - 1:
+                await asyncio.sleep(backoff * (attempt + 1))
+
+        return "unit_no_response"
     finally:
         await manager.async_close()
 
