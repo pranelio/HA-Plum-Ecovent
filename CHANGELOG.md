@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0-b3] - 2026-03-07
+### Changed
+- Updated release metadata to `0.5.0-b3` in `manifest.json` and `const.py`.
+
 ## [0.5.0-b2] - 2026-03-07
 ### Changed
 - Switched default polling update rate to `5` seconds (`DEFAULT_UPDATE_RATE`) for new setups and fallback runtime behavior.
