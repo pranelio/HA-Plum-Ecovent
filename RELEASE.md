@@ -14,7 +14,7 @@ This checklist keeps changelog, code versioning, and Git tags aligned.
   - `docs/supported_tested_devices.md`
 - Confirm developer references reflect architecture/source-of-truth direction:
   - `docs/dev/README.md`
-  - `docs/plum_modbus_register_map.yaml`
+  - `custom_components/plum_ecovent/plum_modbus_register_map.yaml`
 
 ## 2) Align version fields
 - Update `custom_components/plum_ecovent/manifest.json`:

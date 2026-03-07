@@ -90,7 +90,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [x] Provide a migration/cleanup guide for updated `unique_id` formats.
 - [x] Add options flow control to adjust `update_rate` post-setup.
 - [x] Maintain a `__version__` constant, release tags, and changelog.
-- [x] Use `docs/plum_modbus_register_map.yaml` as canonical runtime source and remove duplicate register-map markdown source.
+- [x] Use `custom_components/plum_ecovent/plum_modbus_register_map.yaml` as canonical runtime source and remove duplicate register-map markdown source.
 - [x] Align runtime entity names in YAML with HVAC naming conventions and fix Extract/Exhaust label mapping.
 - [x] Add regression tests/docs for canonical English naming baseline with translation-aware guidance.
 

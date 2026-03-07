@@ -76,7 +76,9 @@ def test_integration_entity_names_follow_canonical_english_baseline() -> None:
     UI localization for other languages should be handled via translations,
     not by changing runtime keys/structure.
     """
-    register_map = yaml.safe_load(Path("docs/plum_modbus_register_map.yaml").read_text(encoding="utf-8"))
+    register_map = yaml.safe_load(
+        Path("custom_components/plum_ecovent/plum_modbus_register_map.yaml").read_text(encoding="utf-8")
+    )
     entities = register_map.get("integration", {}).get("entities", [])
 
     mapping = _canonical_display_mapping_from_conventions()

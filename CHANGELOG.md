@@ -7,7 +7,7 @@ All notable changes to this project are documented in this file.
 - Updated release metadata to `0.5.0-b3` in `manifest.json` and `const.py`.
 
 ### Fixed
-- Register map loading now uses a packaged in-integration YAML file with development-path fallback, preventing setup failures when `/config/docs/plum_modbus_register_map.yaml` is not present.
+- Register map loading now uses a single packaged in-integration YAML file, preventing setup failures when `/config/docs/plum_modbus_register_map.yaml` is not present.
 
 ## [0.5.0-b2] - 2026-03-07
 ### Changed

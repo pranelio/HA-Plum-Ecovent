@@ -94,7 +94,7 @@ This table defines recommended renames to canonical terms.
 
 ## 4.1 Register-map key mapping (vendor -> canonical)
 
-The following extends the mapping using vendor keys from `docs/plum_modbus_register_map.yaml`.
+The following extends the mapping using vendor keys from `custom_components/plum_ecovent/plum_modbus_register_map.yaml`.
 Use these as canonical UI labels (entities, options, services, diagnostics).
 
 | Vendor register-map key | Canonical display name |
@@ -296,7 +296,7 @@ When applying normalization later:
 2. Rename only user-facing labels and translation strings.
 3. Preserve backwards compatibility in automations by not changing service field keys unless migration is provided.
 4. Apply canonical names consistently across sensors, numbers, switches, and options-flow fields.
-5. Treat canonical names in `docs/plum_modbus_register_map.yaml` as an English baseline; provide non-English labels via Home Assistant translations.
+5. Treat canonical names in `custom_components/plum_ecovent/plum_modbus_register_map.yaml` as an English baseline; provide non-English labels via Home Assistant translations.
 
 ## 8) Notes and caveats
 
