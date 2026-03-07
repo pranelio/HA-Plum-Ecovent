@@ -66,7 +66,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Improve Modbus communication:
 	- [ ] Dynamic polling strategy based on enabled entities and feature usage.
 	- [ ] Batch/multi-register reads where possible to reduce call count and bus overhead.
-- [ ] Add Modbus RTU support (USB-to-RS485/Modbus RTU adapters), including automatic connection parameter detection where feasible.
+	- [ ] Implement RTU transport behind the existing config-flow connection type option, then extend with automatic connection parameter detection where feasible.
 - [ ] Add `climate` entity support for temperature control where the device exposes writable setpoint/control registers.
 - [ ] Add `fan` entity support for fan levels/speeds where supported by the device model.
 - [ ] Implement remaining registers from the manufacturer list.
