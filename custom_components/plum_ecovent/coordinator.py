@@ -38,6 +38,8 @@ except Exception:  # Running outside Home Assistant for tests
             return {}
 
 _LOGGER = logging.getLogger(__name__)
+_PARTIAL_FAILURE_WARN_MIN_COUNT = 3
+_PARTIAL_FAILURE_WARN_MIN_RATIO = 0.2
 
 
 class PlumEcoventCoordinator(DataUpdateCoordinator):
@@ -87,6 +89,14 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
                     continue
         return filtered
 
+    @staticmethod
+    def _should_warn_partial_failure(failed_reads: int, total_reads: int) -> bool:
+        if failed_reads >= _PARTIAL_FAILURE_WARN_MIN_COUNT:
+            return True
+        if total_reads <= 0:
+            return False
+        return (failed_reads / total_reads) >= _PARTIAL_FAILURE_WARN_MIN_RATIO
+
     async def _async_update_data(self) -> Dict[str, Any]:
         results: Dict[str, Any] = dict(self.data or {})
         self._cycle += 1
@@ -127,12 +137,12 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
 
         if failed_reads:
             if not self._logged_partial_failure:
-                _LOGGER.warning(
-                    "Coordinator partial failures: %s/%s reads failed; sample failed registers=%s",
-                    failed_reads,
-                    successful_reads + failed_reads,
-                    failed_registers,
-                )
+                total_reads = successful_reads + failed_reads
+                log_message = "Coordinator partial failures: %s/%s reads failed; sample failed registers=%s"
+                if self._should_warn_partial_failure(failed_reads, total_reads):
+                    _LOGGER.warning(log_message, failed_reads, total_reads, failed_registers)
+                else:
+                    _LOGGER.info(log_message, failed_reads, total_reads, failed_registers)
                 self._logged_partial_failure = True
             self._logged_total_failure = False
         else:
