@@ -1,35 +1,26 @@
-"""Register definitions for the Plum Ecovent integration.
+"""Register metadata loaded from the canonical YAML register map.
 
-Each platform (sensor, binary_sensor, switch, number) iterates over the
-appropriate list below when setting up entities.  A definition contains the
-Modbus register address and all of the metadata required by Home Assistant
-(such as device class, units, or write parameters).  Keep these lists in
-sync with the values used by your Plum Ecovent controller; additional
-entries can be added as needed.
-
-The dataclasses in this module are frozen to prevent accidental mutation once
-entities have been created.
+Single source of truth:
+- vendor register map + semantics: docs/plum_modbus_register_map.yaml
+- integration entity metadata (platform mapping, keys, filters, groups, icons):
+  docs/plum_modbus_register_map.yaml -> integration.entities
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+import yaml
+
+
+_REGISTER_MAP_PATH = Path(__file__).resolve().parents[2] / "docs" / "plum_modbus_register_map.yaml"
 
 
 @dataclass(frozen=True)
 class BinarySensorDef:
-    """Metadata for a boolean input register.
-
-    * ``address`` – Modbus register to read (holding register).
-    * ``name`` – human‑readable entity name.
-    * ``device_class`` – optional HA device class (e.g. ``problem``).
-    * ``entity_category`` – category such as ``diagnostic`` or ``config``.
-    * ``skip_updates`` – only refresh every Nth poll (used for slow-changing
-      values).
-        * ``optional`` – set ``True`` when this register is model-dependent and
-            should be probed during discovery.
-    """
     address: int
     name: str
     key: Optional[str] = None
@@ -37,33 +28,12 @@ class BinarySensorDef:
     entity_category: Optional[str] = None
     skip_updates: Optional[int] = None
     optional: bool = False
-
-
-BINARY_SENSORS: List[BinarySensorDef] = [
-    BinarySensorDef(215, "Ground Heat Exchanger Status", key="heat_exchanger_status", entity_category="diagnostic"),
-    BinarySensorDef(217, "Ground Heat Exchanger Regeneration Status", key="heat_exchanger_regeneration", entity_category="diagnostic", skip_updates=5),
-    BinarySensorDef(225, "Supply Filter Replacement Required", key="supply_filter_replacement_needed", device_class="problem", entity_category="diagnostic", skip_updates=5),
-    BinarySensorDef(228, "Extract Filter Replacement Required", key="extract_filter_replacement_needed", device_class="problem", entity_category="diagnostic", skip_updates=5),
-    BinarySensorDef(238, "Secondary Heater Status", key="secondary_heater_status", entity_category="diagnostic", optional=True),
-    BinarySensorDef(240, "Secondary Heater Overtemperature Alarm", key="secondary_heater_overtemperature", device_class="problem", entity_category="diagnostic", optional=True),
-    BinarySensorDef(242, "Preheater Status", key="preheater_status", entity_category="diagnostic", optional=True),
-    BinarySensorDef(244, "Preheater Overtemperature Alarm", key="preheater_overtemperature", device_class="problem", entity_category="diagnostic", optional=True),
-    BinarySensorDef(246, "Supply Fan Status", key="supply_fan_status", entity_category="diagnostic"),
-    BinarySensorDef(248, "Extract Fan Status", key="extract_fan_status", entity_category="diagnostic"),
-]
+    icon: Optional[str] = None
+    groups: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class NumberDef:
-    """Writable numeric register definition.
-
-    Attributes correspond to Home Assistant ``NumberEntity`` parameters:
-    * ``step``/``min_value``/``max_value``/``mode`` control the input widget.
-    * ``unit_of_measurement`` and ``device_class`` describe the quantity.
-    * ``entity_category`` allows ``config`` or ``diagnostic`` grouping.
-        * ``optional`` – set ``True`` when this register is model-dependent and
-            should be probed during discovery.
-    """
     address: int
     name: str
     key: Optional[str] = None
@@ -76,39 +46,12 @@ class NumberDef:
     mode: Optional[str] = None
     skip_updates: Optional[int] = None
     optional: bool = False
-
-
-NUMBERS: List[NumberDef] = [
-    NumberDef(70, "Supply Fan Speed Stage 1", key="supply_fan_speed_g1", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(71, "Supply Fan Speed Stage 2", key="supply_fan_speed_g2", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(72, "Supply Fan Speed Stage 3", key="supply_fan_speed_g3", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(74, "Extract Fan Speed Stage 1", key="exhaust_fan_speed_g1", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(75, "Extract Fan Speed Stage 2", key="exhaust_fan_speed_g2", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(76, "Extract Fan Speed Stage 3", key="exhaust_fan_speed_g3", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=3),
-    NumberDef(79, "Auto Mode Minimum Fan Speed", key="auto_minimum_fan_speed", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=5),
-    NumberDef(80, "Auto Mode Maximum Fan Speed", key="auto_maximum_fan_speed", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=5),
-    NumberDef(81, "CO2 Setpoint", key="max_co2", device_class="carbon_dioxide", unit_of_measurement="ppm", entity_category="config", step=1, min_value=0, max_value=2000, mode="BOX", skip_updates=20, optional=True),
-    NumberDef(83, "Relative Humidity Setpoint", key="max_humidity", device_class="humidity", unit_of_measurement="%", entity_category="config", step=1, min_value=0, max_value=100, mode="BOX", skip_updates=20, optional=True),
-    NumberDef(93, "Comfort Temperature (Day)", key="comfort_temperature_day", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=8, max_value=30, mode="BOX", skip_updates=20),
-    NumberDef(94, "Comfort Temperature (Night)", key="comfort_temperature_night", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=8, max_value=30, mode="BOX", skip_updates=20),
-    NumberDef(103, "Winter Activation Temperature", key="winter_mode_activation_temperature", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=-20, max_value=20, mode="BOX", skip_updates=20),
-    NumberDef(104, "Summer Activation Temperature", key="summer_mode_activation_temperature", device_class="temperature", unit_of_measurement="°C", entity_category="config", step=1, min_value=0, max_value=20, mode="BOX", skip_updates=20),
-    NumberDef(115, "Boost 1 Supply Fan Speed", key="boost_supply_speed", unit_of_measurement="%", entity_category="config", step=1, min_value=50, max_value=100, mode="BOX", skip_updates=20),
-    NumberDef(116, "Boost 1 Extract Fan Speed", key="boost_extract_speed", unit_of_measurement="%", entity_category="config", step=1, min_value=50, max_value=100, mode="BOX", skip_updates=20),
-    NumberDef(117, "Boost 1 Duration", key="boost_duration", device_class="duration", unit_of_measurement="min", entity_category="config", step=1, min_value=1, max_value=60, mode="BOX", skip_updates=20),
-    # and so on: additional number definitions can be added here
-]
+    icon: Optional[str] = None
+    groups: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class SensorDef:
-    """Definition for a read‑only numeric register.
-
-    ``filters`` may be a list of conversion dicts applied to the raw value
-    (e.g. ``{"multiply": 0.1}`` to divide by ten).  ``accuracy_decimals`` is
-    used by the sensor entity to format the value. ``optional`` marks
-    model-dependent entities to be probed during discovery.
-    """
     address: int
     name: str
     key: Optional[str] = None
@@ -119,42 +62,12 @@ class SensorDef:
     filters: Optional[List[Dict[str, Any]]] = None
     skip_updates: Optional[int] = None
     optional: bool = False
+    icon: Optional[str] = None
+    groups: tuple[str, ...] = ()
 
 
-SENSORS: List[SensorDef] = [
-    SensorDef(82, "Indoor CO2", key="co2", device_class="carbon_dioxide", unit_of_measurement="ppm", accuracy_decimals=0, filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(84, "Indoor Relative Humidity", key="humidity", device_class="humidity", unit_of_measurement="%", accuracy_decimals=1, filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(201, "Comfort Temperature", key="comfort_temperature", device_class="temperature", unit_of_measurement="°C"),
-    SensorDef(202, "Outdoor Air Temperature", key="outdoor_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(203, "Leading Air Temperature", key="leading_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(206, "Outdoor Air Temperature (Intake)", key="intake_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(209, "Extract Air Temperature", key="extract_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(208, "Supply Air Temperature", key="supply_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(207, "Exhaust Air Temperature", key="exhaust_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(211, "Control Panel Temperature", key="control_panel_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}]),
-    SensorDef(214, "Secondary Heater Downstream Air Temperature", key="secondary_heater_temperature", device_class="temperature", unit_of_measurement="°C", accuracy_decimals=1, filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(221, "Operating Days", key="days_of_operation", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
-    SensorDef(222, "Days Until Service", key="days_to_inspection", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
-    SensorDef(223, "Days Until Lockout", key="days_until_device_lock", device_class="duration", unit_of_measurement="d", entity_category="diagnostic"),
-    SensorDef(230, "Supply Filter Condition", key="supply_filter_pollution", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], skip_updates=20),
-    SensorDef(231, "Supply Filter Operating Days", key="supply_filter_working_days", device_class="duration", unit_of_measurement="d", entity_category="diagnostic", skip_updates=20),
-    SensorDef(232, "Extract Filter Condition", key="extract_filter_pollution", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], skip_updates=20),
-    SensorDef(233, "Extract Filter Operating Days", key="extract_filter_working_days", device_class="duration", unit_of_measurement="d", entity_category="diagnostic", skip_updates=20),
-    SensorDef(239, "Secondary Heater Current Control", key="secondary_heater_current_control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(243, "Preheater Current Control", key="preheater_current_control", unit_of_measurement="%", entity_category="diagnostic", filters=[{"multiply": 0.1}], optional=True),
-    SensorDef(247, "Supply Fan Current Control", key="supply_fan_speed", unit_of_measurement="%"),
-    SensorDef(249, "Extract Fan Current Control", key="extract_fan_speed", unit_of_measurement="%"),
-]
-
-# switch definitions
 @dataclass(frozen=True)
 class SwitchDef:
-    """On/off register metadata.
-
-    ``bitmask`` allows a single register to expose multiple boolean values.
-    ``optional`` marks model-dependent entities to be probed during
-    discovery.
-    """
     address: int
     name: str
     key: Optional[str] = None
@@ -162,135 +75,301 @@ class SwitchDef:
     entity_category: Optional[str] = None
     skip_updates: Optional[int] = None
     optional: bool = False
+    icon: Optional[str] = None
+    groups: tuple[str, ...] = ()
 
 
-SWITCHES: List[SwitchDef] = [
-    SwitchDef(59, "Unit Enable", key="on_off"),
-    SwitchDef(78, "Auto Mode", key="auto_mode"),
-    SwitchDef(114, "Boost Mode", key="boost_mode"),
-    SwitchDef(144, "Secondary Heater Enable", key="secondary_heater", entity_category="config", skip_updates=5, bitmask=0x04, optional=True),
+@lru_cache(maxsize=1)
+def _load_register_map() -> dict[str, Any]:
+    with _REGISTER_MAP_PATH.open("r", encoding="utf-8") as file_handle:
+        parsed = yaml.safe_load(file_handle) or {}
+    if not isinstance(parsed, dict):
+        raise ValueError("Invalid register map format: expected top-level mapping")
+    return parsed
+
+
+@lru_cache(maxsize=1)
+def _canonical_registers_by_name() -> dict[str, dict[str, Any]]:
+    registers = _load_register_map().get("registers", [])
+    if not isinstance(registers, list):
+        return {}
+    by_name: dict[str, dict[str, Any]] = {}
+    for entry in registers:
+        if not isinstance(entry, dict):
+            continue
+        raw_name = entry.get("name")
+        if raw_name is None:
+            continue
+        by_name[str(raw_name)] = entry
+    return by_name
+
+
+def _canonical_unit_to_ha(unit: Any) -> Optional[str]:
+    if unit is None:
+        return None
+    normalized = str(unit).strip().lower()
+    unit_map = {
+        "percent": "%",
+        "celsius": "°C",
+        "ppm": "ppm",
+    }
+    return unit_map.get(normalized, str(unit))
+
+
+def _merge_entity_with_canonical_register(item: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(item)
+    register_name = merged.get("register")
+    canonical: dict[str, Any] | None = None
+
+    if register_name is not None:
+        canonical = _canonical_registers_by_name().get(str(register_name))
+        if canonical is None:
+            raise ValueError(f"Unknown canonical register reference: {register_name}")
+
+    if canonical is not None:
+        canonical_address = canonical.get("address")
+        if canonical_address is None:
+            raise ValueError(f"Canonical register {register_name} has no address")
+
+        explicit_address = merged.get("address")
+        if explicit_address is not None and int(explicit_address) != int(canonical_address):
+            raise ValueError(
+                "Integration entity address mismatch for register "
+                f"{register_name}: {explicit_address} != {canonical_address}"
+            )
+
+        merged.setdefault("address", int(canonical_address))
+
+        platform = str(merged.get("platform", ""))
+        unit = _canonical_unit_to_ha(canonical.get("unit"))
+        if unit and platform in {"sensor", "number"}:
+            merged.setdefault("unit_of_measurement", unit)
+
+        if platform == "number":
+            if canonical.get("min") is not None:
+                merged.setdefault("min_value", canonical.get("min"))
+            if canonical.get("max") is not None:
+                merged.setdefault("max_value", canonical.get("max"))
+
+    if merged.get("address") is None:
+        raise ValueError("Integration entity is missing address/register reference")
+
+    return merged
+
+
+@lru_cache(maxsize=1)
+def _integration_entities() -> list[dict[str, Any]]:
+    data = _load_register_map().get("integration", {})
+    if not isinstance(data, dict):
+        return []
+    entities = data.get("entities", [])
+    if not isinstance(entities, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in entities:
+        if isinstance(item, dict):
+            normalized.append(_merge_entity_with_canonical_register(item))
+    return normalized
+
+
+def _groups_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, list):
+        return tuple(str(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(str(item) for item in value)
+    return ()
+
+
+def _as_int(value: Any) -> int:
+    return int(value)
+
+
+def _defs_for_platform(platform: str) -> list[dict[str, Any]]:
+    return [item for item in _integration_entities() if str(item.get("platform", "")) == platform]
+
+
+def _build_sensor_def(item: dict[str, Any]) -> SensorDef:
+    filters = item.get("filters")
+    if not isinstance(filters, list):
+        filters = None
+    return SensorDef(
+        address=_as_int(item["address"]),
+        name=str(item["name"]),
+        key=item.get("key"),
+        device_class=item.get("device_class"),
+        unit_of_measurement=item.get("unit_of_measurement"),
+        accuracy_decimals=item.get("accuracy_decimals"),
+        entity_category=item.get("entity_category"),
+        filters=filters,
+        skip_updates=item.get("skip_updates"),
+        optional=bool(item.get("optional", False)),
+        icon=item.get("icon"),
+        groups=_groups_tuple(item.get("groups")),
+    )
+
+
+def _build_binary_sensor_def(item: dict[str, Any]) -> BinarySensorDef:
+    return BinarySensorDef(
+        address=_as_int(item["address"]),
+        name=str(item["name"]),
+        key=item.get("key"),
+        device_class=item.get("device_class"),
+        entity_category=item.get("entity_category"),
+        skip_updates=item.get("skip_updates"),
+        optional=bool(item.get("optional", False)),
+        icon=item.get("icon"),
+        groups=_groups_tuple(item.get("groups")),
+    )
+
+
+def _build_switch_def(item: dict[str, Any]) -> SwitchDef:
+    return SwitchDef(
+        address=_as_int(item["address"]),
+        name=str(item["name"]),
+        key=item.get("key"),
+        bitmask=int(item.get("bitmask", 1)),
+        entity_category=item.get("entity_category"),
+        skip_updates=item.get("skip_updates"),
+        optional=bool(item.get("optional", False)),
+        icon=item.get("icon"),
+        groups=_groups_tuple(item.get("groups")),
+    )
+
+
+def _build_number_def(item: dict[str, Any]) -> NumberDef:
+    return NumberDef(
+        address=_as_int(item["address"]),
+        name=str(item["name"]),
+        key=item.get("key"),
+        unit_of_measurement=item.get("unit_of_measurement"),
+        device_class=item.get("device_class"),
+        entity_category=item.get("entity_category"),
+        step=item.get("step"),
+        min_value=item.get("min_value"),
+        max_value=item.get("max_value"),
+        mode=item.get("mode"),
+        skip_updates=item.get("skip_updates"),
+        optional=bool(item.get("optional", False)),
+        icon=item.get("icon"),
+        groups=_groups_tuple(item.get("groups")),
+    )
+
+
+SENSORS: List[SensorDef] = [_build_sensor_def(item) for item in _defs_for_platform("sensor")]
+BINARY_SENSORS: List[BinarySensorDef] = [
+    _build_binary_sensor_def(item) for item in _defs_for_platform("binary_sensor")
 ]
+SWITCHES: List[SwitchDef] = [_build_switch_def(item) for item in _defs_for_platform("switch")]
+NUMBERS: List[NumberDef] = [_build_number_def(item) for item in _defs_for_platform("number")]
+
+
+def definition_key(definition: Any) -> str:
+    explicit = getattr(definition, "key", None)
+    if explicit:
+        return str(explicit)
+    return str(getattr(definition, "name", "unknown")).strip().lower().replace(" ", "_")
 
 
 def entity_definition_id(platform: str, definition: Any) -> str:
-    """Return a stable identifier for an entity definition."""
     return f"{platform}:{int(getattr(definition, 'address', -1))}:{definition_key(definition)}"
 
 
 def optional_entity_id(platform: str, definition: Any) -> str:
-    """Backward-compatible alias for old optional-entity identifier helper."""
     return entity_definition_id(platform, definition)
 
 
-def entity_catalog() -> dict[str, str]:
-    """Return selectable entities mapped by id -> user label."""
-    by_platform: dict[str, list[Any]] = {
+def _platform_map() -> dict[str, list[Any]]:
+    return {
         "sensor": SENSORS,
         "binary_sensor": BINARY_SENSORS,
         "switch": SWITCHES,
         "number": NUMBERS,
     }
 
+
+def entity_catalog() -> dict[str, str]:
     catalog: dict[str, str] = {}
-    for platform, definitions in by_platform.items():
+    for platform, definitions in _platform_map().items():
         for definition in definitions:
             entity_id = entity_definition_id(platform, definition)
             catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
-
     return catalog
 
 
 def optional_entity_catalog() -> dict[str, str]:
-    """Return selectable optional entities mapped by id -> user label."""
     catalog: dict[str, str] = {}
-    by_platform: dict[str, list[Any]] = {
-        "sensor": SENSORS,
-        "binary_sensor": BINARY_SENSORS,
-        "switch": SWITCHES,
-        "number": NUMBERS,
-    }
-    for platform, definitions in by_platform.items():
+    for platform, definitions in _platform_map().items():
         for definition in definitions:
             if not getattr(definition, "optional", False):
                 continue
             entity_id = entity_definition_id(platform, definition)
             catalog[entity_id] = f"{platform} · {definition.name} ({definition.address})"
-
     return catalog
 
 
-DEVICE_SETTINGS_GROUPS: dict[str, dict[str, Any]] = {
-    "supply_fan": {
-        "label": "Supply fan speeds",
-        "keys": [
-            "supply_fan_speed_g1",
-            "supply_fan_speed_g2",
-            "supply_fan_speed_g3",
-        ],
-    },
-    "exhaust_fan": {
-        "label": "Extract fan speeds",
-        "keys": [
-            "exhaust_fan_speed_g1",
-            "exhaust_fan_speed_g2",
-            "exhaust_fan_speed_g3",
-        ],
-    },
-    "auto_control": {
-        "label": "Auto control",
-        "keys": [
-            "auto_minimum_fan_speed",
-            "auto_maximum_fan_speed",
-        ],
-    },
-    "boost": {
-        "label": "Boost settings",
-        "keys": [
-            "boost_supply_speed",
-            "boost_extract_speed",
-            "boost_duration",
-        ],
-    },
-    "temperature": {
-        "label": "Temperature settings",
-        "keys": [
-            "comfort_temperature_day",
-            "comfort_temperature_night",
-            "winter_mode_activation_temperature",
-            "summer_mode_activation_temperature",
-        ],
-    },
-}
+def entity_definitions_for_group(group: str, platform: str | None = None) -> list[Any]:
+    group_name = str(group)
+    result: list[Any] = []
+    platforms = _platform_map()
+    selected: Iterable[tuple[str, list[Any]]]
+    if platform is None:
+        selected = platforms.items()
+    else:
+        selected = [(platform, platforms.get(platform, []))]
+    for _, definitions in selected:
+        for definition in definitions:
+            if group_name in getattr(definition, "groups", ()): 
+                result.append(definition)
+    return result
 
 
-def definition_key(definition: Any) -> str:
-    """Return stable, language-agnostic key for a definition."""
-    explicit = getattr(definition, "key", None)
-    if explicit:
-        return str(explicit)
-    name_slug = str(getattr(definition, "name", "unknown")).strip().lower().replace(" ", "_")
-    return name_slug
+def grouped_entity_catalog() -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for platform, definitions in _platform_map().items():
+        for definition in definitions:
+            entity_id = entity_definition_id(platform, definition)
+            for group_name in getattr(definition, "groups", ()): 
+                grouped.setdefault(str(group_name), []).append(entity_id)
+    return {key: sorted(value) for key, value in grouped.items()}
+
+
+@lru_cache(maxsize=1)
+def _device_settings_groups_raw() -> dict[str, dict[str, Any]]:
+    integration = _load_register_map().get("integration", {})
+    if not isinstance(integration, dict):
+        return {}
+    groups = integration.get("device_settings_groups", {})
+    if not isinstance(groups, dict):
+        return {}
+    normalized: dict[str, dict[str, Any]] = {}
+    for group_id, group_meta in groups.items():
+        if not isinstance(group_meta, dict):
+            continue
+        keys = group_meta.get("keys", [])
+        normalized[str(group_id)] = {
+            "label": str(group_meta.get("label", group_id)),
+            "keys": [str(key) for key in keys] if isinstance(keys, list) else [],
+        }
+    return normalized
 
 
 def device_setting_key(definition: NumberDef) -> str:
-    """Return a stable options/service key for a configurable number definition."""
     return definition_key(definition)
 
 
 def device_setting_catalog() -> dict[str, dict[str, Any]]:
-    """Return settings map key -> metadata for configurable values managed via options/services."""
     by_key: dict[str, NumberDef] = {device_setting_key(definition): definition for definition in NUMBERS}
     catalog: dict[str, dict[str, Any]] = {}
-
-    for group_id, group_meta in DEVICE_SETTINGS_GROUPS.items():
-        for key in group_meta["keys"]:
-            definition = by_key.get(key)
+    for group_id, group_meta in _device_settings_groups_raw().items():
+        keys = group_meta.get("keys", [])
+        for key in keys:
+            definition = by_key.get(str(key))
             if definition is None:
                 continue
-            catalog[key] = {
-                "key": key,
+            catalog[str(key)] = {
+                "key": str(key),
                 "group": group_id,
-                "group_label": group_meta["label"],
+                "group_label": group_meta.get("label", group_id),
                 "name": definition.name,
                 "address": int(definition.address),
                 "min": definition.min_value,
@@ -298,15 +377,13 @@ def device_setting_catalog() -> dict[str, dict[str, Any]]:
                 "step": definition.step,
                 "unit": definition.unit_of_measurement,
             }
-
     return catalog
 
 
 def device_setting_groups() -> dict[str, dict[str, Any]]:
-    """Return grouped setting metadata for options flow rendering."""
     catalog = device_setting_catalog()
     grouped: dict[str, dict[str, Any]] = {}
-    for group_id, group_meta in DEVICE_SETTINGS_GROUPS.items():
+    for group_id, group_meta in _device_settings_groups_raw().items():
         grouped[group_id] = {
             "label": group_meta["label"],
             "settings": [
@@ -317,5 +394,4 @@ def device_setting_groups() -> dict[str, dict[str, Any]]:
 
 
 def device_setting_addresses() -> set[int]:
-    """Return register addresses represented by options-managed device settings."""
     return {int(value["address"]) for value in device_setting_catalog().values()}

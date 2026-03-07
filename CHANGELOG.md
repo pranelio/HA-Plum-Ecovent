@@ -17,11 +17,16 @@ All notable changes to this project are documented in this file.
 - Register capability probing now enforces a global discovery deadline and startup timeout guard to avoid long setup hangs.
 - Options flow entity selection now aligns with discovered capabilities while preserving legacy override entries.
 - Entity toggle choices now keep options-managed number settings hidden, preserving the options-only settings policy.
+- Register definitions are now loaded from `docs/plum_modbus_register_map.yaml` (`integration.entities`) instead of duplicated hardcoded lists in `registers.py`.
+- Integration entity entries now reference canonical top-level registers by name (`register`) with inherited address/unit/range metadata, reducing duplicated YAML fields.
+- Integration entity display names in YAML were aligned with `docs/hvac_naming_conventions.md` (including corrected Extract/Exhaust label mapping).
+- Added internal multi-group tags and icon metadata in the canonical register map for development-oriented filtering and future tooling.
 
 ### Fixed
 - Verification now reports a dedicated `unit_no_response` path when adapter TCP connectivity succeeds but no Modbus response is returned for the selected address.
 - Discovery/entity setup no longer creates opportunistic entities when setup explicitly determined no available registers.
 - Coordinator partial-failure warnings now include sample failed registers to improve diagnostics versus generic count-only logs.
+- Removed duplicate register-map markdown source in favor of the YAML canonical source.
 
 ## [0.4.3] - 2026-03-03
 ### Fixed

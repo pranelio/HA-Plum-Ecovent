@@ -236,9 +236,9 @@ registers:
   - { address: 79, name: auto_mode_min_fan_speed, access: R/W, type: uint8, permission: User, dependencies: [r366, r80] }
   - { address: 80, name: auto_mode_max_fan_speed, access: R/W, type: uint8, permission: User, dependencies: [r79, r367] }
   - { address: 81, name: auto_mode_co2_setpoint, access: R/W, type: uint16, min: 0, max: 2000, permission: User, unit: ppm }
-  - { address: 82, name: co2_current, access: R, type: float, permission: User }
+  - { address: 82, name: co2_current, access: R, type: float, permission: User, unit: ppm }
   - { address: 83, name: auto_mode_rh_setpoint, access: R/W, type: uint8, min: 0, max: 100, permission: User, unit: percent }
-  - { address: 84, name: rh_current, access: R, type: float, permission: User }
+  - { address: 84, name: rh_current, access: R, type: float, permission: User, unit: percent }
 
   - { address: 85, name: time_mode, access: R/W, type: uint8, min: 0, max: 3, permission: User, enum: { 0: none, 1: away, 2: party, 3: airing } }
   - { address: 86, name: away_duration_hours, access: R/W, type: uint8, min: 1, max: 10, permission: User }
@@ -275,7 +275,7 @@ registers:
   - { address: 114, name: boost_mode, access: R/W, type: uint8, min: 0, max: 2, permission: User, enum: { 0: off, 1: boost1, 2: boost2 } }
   - { address: 115, name: boost1_supply_fan_speed, access: R/W, type: int16, min: -7000, max: 7000, permission: User }
   - { address: 116, name: boost1_extract_fan_speed, access: R/W, type: int16, min: -7000, max: 7000, permission: User }
-  - { address: 117, name: boost1_duration_minutes, access: R/W, type: uint8, min: 1, max: 60, permission: User }
+  - { address: 117, name: boost1_duration_minutes, access: R/W, type: uint8, min: 1, max: 60, permission: User, unit: min }
   - { address: 118, name: boost2_supply_fan_speed, access: R/W, type: int16, min: -7000, max: 7000, permission: User }
   - { address: 119, name: boost2_extract_fan_speed, access: R/W, type: int16, min: -7000, max: 7000, permission: User }
   - { address: 120, name: boost2_duration_minutes, access: R/W, type: uint8, min: 1, max: 60, permission: User }
@@ -342,21 +342,21 @@ registers:
       15: cold_recovery
       16: service_stop
 
-  - { address: 201, name: comfort_temperature_current, access: R, type: float, permission: User }
-  - { address: 202, name: outdoor_temperature, access: R, type: float, permission: User }
-  - { address: 203, name: leading_temperature, access: R, type: float, permission: User }
+  - { address: 201, name: comfort_temperature_current, access: R, type: float, permission: User, unit: celsius }
+  - { address: 202, name: outdoor_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 203, name: leading_temperature, access: R, type: float, permission: User, unit: celsius }
   - { address: 204, name: lead_temperature_sensor_type, access: R, type: uint8, permission: User, enum: { 0: supply, 1: extract, 2: extract_i2c, 3: evotouch, 4: scp, 255: error } }
   - { address: 205, name: regulation_mode, access: R, type: uint8, permission: User, enum: { 0: cooling, 1: heating } }
 
-  - { address: 206, name: intake_temperature, access: R, type: float, permission: User }
-  - { address: 207, name: extract_temperature, access: R, type: float, permission: User }
-  - { address: 208, name: supply_temperature, access: R, type: float, permission: User }
-  - { address: 209, name: exhaust_temperature, access: R, type: float, permission: User }
-  - { address: 210, name: secondary_sensor_temperature, access: R, type: float, permission: User }
-  - { address: 211, name: scp_temperature, access: R, type: float, permission: User }
-  - { address: 212, name: panel_temperature, access: R, type: float, permission: User }
-  - { address: 213, name: temperature_behind_preheater, access: R, type: float, permission: User }
-  - { address: 214, name: temperature_behind_secondary_heater, access: R, type: float, permission: User }
+  - { address: 206, name: intake_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 207, name: extract_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 208, name: supply_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 209, name: exhaust_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 210, name: secondary_sensor_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 211, name: scp_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 212, name: panel_temperature, access: R, type: float, permission: User, unit: celsius }
+  - { address: 213, name: temperature_behind_preheater, access: R, type: float, permission: User, unit: celsius }
+  - { address: 214, name: temperature_behind_secondary_heater, access: R, type: float, permission: User, unit: celsius }
 
   - { address: 215, name: ghe_status, access: R, type: uint8, min: 0, max: 1, permission: User }
   - { address: 216, name: ghe_temperature, access: R, type: float, permission: User }
@@ -404,3 +404,550 @@ registers:
   - { address: 250, name: bypass_current_control, access: R, type: uint16, min: 0, max: 1000, permission: User, scale: 0.1, unit: percent }
   - { address: 251, name: aggregate_state, access: R, type: uint8, min: 0, max: 2, permission: User, enum: { 0: off, 1: heating, 2: cooling } }
   - { address: 252, name: bypass_state, access: R, type: uint8, min: 0, max: 1, permission: User, enum: { 0: off, 1: on } }
+
+integration:
+  notes:
+    - This section is the runtime source of truth for entity mapping and discovery metadata.
+    - Each entity should reference a canonical register by `register` (from top-level `registers`) instead of duplicating `address` metadata.
+    - Groups are internal-only development tags; an entity can belong to multiple groups.
+
+  device_settings_groups:
+    supply_fan:
+      label: Supply fan speeds
+      keys: [supply_fan_speed_g1, supply_fan_speed_g2, supply_fan_speed_g3]
+    exhaust_fan:
+      label: Extract fan speeds
+      keys: [exhaust_fan_speed_g1, exhaust_fan_speed_g2, exhaust_fan_speed_g3]
+    auto_control:
+      label: Auto control
+      keys: [auto_minimum_fan_speed, auto_maximum_fan_speed]
+    boost:
+      label: Boost settings
+      keys: [boost_supply_speed, boost_extract_speed, boost_duration]
+    temperature:
+      label: Temperature settings
+      keys: [comfort_temperature_day, comfort_temperature_night, winter_mode_activation_temperature, summer_mode_activation_temperature]
+
+  entities:
+    - platform: binary_sensor
+      register: ghe_status
+      name: Ground Heat Exchanger Status
+      key: heat_exchanger_status
+      entity_category: diagnostic
+      icon: mdi:pipe-valve
+      groups: [implemented, hvac, diagnostics, ghe]
+    - platform: binary_sensor
+      register: ghe_regeneration_status
+      name: Ground Heat Exchanger Regeneration Status
+      key: heat_exchanger_regeneration
+      entity_category: diagnostic
+      skip_updates: 5
+      icon: mdi:recycle
+      groups: [implemented, hvac, diagnostics, ghe]
+    - platform: binary_sensor
+      register: supply_filter_replacement_needed
+      name: Supply Filter Replacement Required
+      key: supply_filter_replacement_needed
+      device_class: problem
+      entity_category: diagnostic
+      skip_updates: 5
+      icon: mdi:air-filter
+      groups: [implemented, hvac, diagnostics, filters]
+    - platform: binary_sensor
+      register: extract_filter_replacement_needed
+      name: Extract Filter Replacement Required
+      key: extract_filter_replacement_needed
+      device_class: problem
+      entity_category: diagnostic
+      skip_updates: 5
+      icon: mdi:air-filter
+      groups: [implemented, hvac, diagnostics, filters]
+    - platform: binary_sensor
+      register: secondary_heater_status
+      name: Secondary Heater Status
+      key: secondary_heater_status
+      entity_category: diagnostic
+      optional: true
+      icon: mdi:radiator
+      groups: [implemented, hvac, diagnostics, heater, optional]
+    - platform: binary_sensor
+      register: secondary_heater_overtemperature
+      name: Secondary Heater Overtemperature Alarm
+      key: secondary_heater_overtemperature
+      device_class: problem
+      entity_category: diagnostic
+      optional: true
+      icon: mdi:alert-circle
+      groups: [implemented, hvac, diagnostics, heater, optional]
+    - platform: binary_sensor
+      register: preheater_status
+      name: Preheater Status
+      key: preheater_status
+      entity_category: diagnostic
+      optional: true
+      icon: mdi:radiator-disabled
+      groups: [implemented, hvac, diagnostics, heater, optional]
+    - platform: binary_sensor
+      register: preheater_overtemperature
+      name: Preheater Overtemperature Alarm
+      key: preheater_overtemperature
+      device_class: problem
+      entity_category: diagnostic
+      optional: true
+      icon: mdi:alert-circle
+      groups: [implemented, hvac, diagnostics, heater, optional]
+    - platform: binary_sensor
+      register: supply_fan_operation
+      name: Supply Fan Status
+      key: supply_fan_status
+      entity_category: diagnostic
+      icon: mdi:fan
+      groups: [implemented, hvac, diagnostics, fan]
+    - platform: binary_sensor
+      register: extract_fan_operation
+      name: Extract Fan Status
+      key: extract_fan_status
+      entity_category: diagnostic
+      icon: mdi:fan
+      groups: [implemented, hvac, diagnostics, fan]
+
+    - platform: switch
+      register: unit_on_off
+      name: Unit Enable
+      key: on_off
+      icon: mdi:power
+      groups: [implemented, hvac, control]
+    - platform: switch
+      register: auto_mode_enable
+      name: Auto Mode Enable
+      key: auto_mode
+      icon: mdi:autorenew
+      groups: [implemented, hvac, control, automation]
+    - platform: switch
+      register: boost_mode
+      name: Boost Mode
+      key: boost_mode
+      icon: mdi:rocket-launch-outline
+      groups: [implemented, hvac, control, boost]
+    - platform: switch
+      register: additional_equipment_enable_mask
+      name: Additional Equipment Enable Mask
+      key: secondary_heater
+      bitmask: 4
+      entity_category: config
+      skip_updates: 5
+      optional: true
+      icon: mdi:radiator
+      groups: [implemented, hvac, control, heater, optional]
+
+    - platform: number
+      register: supply_fan_speed_gear1
+      name: Supply Fan Speed Stage 1
+      key: supply_fan_speed_g1
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: supply_fan_speed_gear2
+      name: Supply Fan Speed Stage 2
+      key: supply_fan_speed_g2
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: supply_fan_speed_gear3
+      name: Supply Fan Speed Stage 3
+      key: supply_fan_speed_g3
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: extract_fan_speed_gear1
+      name: Extract Fan Speed Stage 1
+      key: exhaust_fan_speed_g1
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: extract_fan_speed_gear2
+      name: Extract Fan Speed Stage 2
+      key: exhaust_fan_speed_g2
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: extract_fan_speed_gear3
+      name: Extract Fan Speed Stage 3
+      key: exhaust_fan_speed_g3
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 3
+      icon: mdi:fan-plus
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: auto_mode_min_fan_speed
+      name: Auto Mode Minimum Fan Speed
+      key: auto_minimum_fan_speed
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 5
+      icon: mdi:fan-chevron-down
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: auto_mode_max_fan_speed
+      name: Auto Mode Maximum Fan Speed
+      key: auto_maximum_fan_speed
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 0
+      max_value: 100
+      mode: BOX
+      skip_updates: 5
+      icon: mdi:fan-chevron-up
+      groups: [implemented, hvac, settings, options_managed_setting, fan]
+    - platform: number
+      register: auto_mode_co2_setpoint
+      name: CO2 Setpoint
+      key: max_co2
+      device_class: carbon_dioxide
+      entity_category: config
+      step: 1
+      mode: BOX
+      skip_updates: 20
+      optional: true
+      icon: mdi:molecule-co2
+      groups: [implemented, hvac, settings, optional, co2]
+    - platform: number
+      register: auto_mode_rh_setpoint
+      name: Relative Humidity Setpoint
+      key: max_humidity
+      device_class: humidity
+      entity_category: config
+      step: 1
+      mode: BOX
+      skip_updates: 20
+      optional: true
+      icon: mdi:water-percent
+      groups: [implemented, hvac, settings, optional, humidity]
+    - platform: number
+      register: comfort_temperature_day
+      name: Comfort Temperature (Day)
+      key: comfort_temperature_day
+      device_class: temperature
+      unit_of_measurement: "°C"
+      entity_category: config
+      step: 1
+      min_value: 8
+      max_value: 30
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:thermometer
+      groups: [implemented, hvac, settings, options_managed_setting, temperature]
+    - platform: number
+      register: comfort_temperature_night
+      name: Comfort Temperature (Night)
+      key: comfort_temperature_night
+      device_class: temperature
+      unit_of_measurement: "°C"
+      entity_category: config
+      step: 1
+      min_value: 8
+      max_value: 30
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:thermometer
+      groups: [implemented, hvac, settings, options_managed_setting, temperature]
+    - platform: number
+      register: winter_activation_temperature
+      name: Winter Activation Temperature
+      key: winter_mode_activation_temperature
+      device_class: temperature
+      entity_category: config
+      step: 1
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:snowflake-thermometer
+      groups: [implemented, hvac, settings, options_managed_setting, temperature]
+    - platform: number
+      register: summer_activation_temperature
+      name: Summer Activation Temperature
+      key: summer_mode_activation_temperature
+      device_class: temperature
+      entity_category: config
+      step: 1
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:white-balance-sunny
+      groups: [implemented, hvac, settings, options_managed_setting, temperature]
+    - platform: number
+      register: boost1_supply_fan_speed
+      name: Boost 1 Supply Fan Speed
+      key: boost_supply_speed
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 50
+      max_value: 100
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:fan-speed-3
+      groups: [implemented, hvac, settings, options_managed_setting, boost]
+    - platform: number
+      register: boost1_extract_fan_speed
+      name: Boost 1 Extract Fan Speed
+      key: boost_extract_speed
+      unit_of_measurement: "%"
+      entity_category: config
+      step: 1
+      min_value: 50
+      max_value: 100
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:fan-speed-3
+      groups: [implemented, hvac, settings, options_managed_setting, boost]
+    - platform: number
+      register: boost1_duration_minutes
+      name: Boost 1 Duration
+      key: boost_duration
+      device_class: duration
+      entity_category: config
+      step: 1
+      mode: BOX
+      skip_updates: 20
+      icon: mdi:timer-outline
+      groups: [implemented, hvac, settings, options_managed_setting, boost]
+
+    - platform: sensor
+      register: co2_current
+      name: Indoor CO2
+      key: co2
+      device_class: carbon_dioxide
+      accuracy_decimals: 0
+      filters: [{ multiply: 0.1 }]
+      optional: true
+      icon: mdi:molecule-co2
+      groups: [implemented, telemetry, optional, co2]
+    - platform: sensor
+      register: rh_current
+      name: Indoor Relative Humidity
+      key: humidity
+      device_class: humidity
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      optional: true
+      icon: mdi:water-percent
+      groups: [implemented, telemetry, optional, humidity]
+    - platform: sensor
+      register: comfort_temperature_current
+      name: Comfort Temperature (Current)
+      key: comfort_temperature
+      device_class: temperature
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: outdoor_temperature
+      name: Outdoor Air Temperature
+      key: outdoor_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: leading_temperature
+      name: Leading Air Temperature
+      key: leading_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: intake_temperature
+      name: Outdoor Air Temperature
+      key: intake_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: exhaust_temperature
+      name: Exhaust Air Temperature
+      key: extract_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: supply_temperature
+      name: Supply Air Temperature
+      key: supply_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: extract_temperature
+      name: Extract Air Temperature
+      key: exhaust_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: scp_temperature
+      name: Control Panel Temperature
+      key: control_panel_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, temperature]
+    - platform: sensor
+      register: temperature_behind_secondary_heater
+      name: Secondary Heater Downstream Air Temperature
+      key: secondary_heater_temperature
+      device_class: temperature
+      accuracy_decimals: 1
+      filters: [{ multiply: 0.1 }]
+      optional: true
+      icon: mdi:thermometer
+      groups: [implemented, telemetry, optional, heater]
+    - platform: sensor
+      register: days_of_operation
+      name: Operating Days
+      key: days_of_operation
+      device_class: duration
+      unit_of_measurement: d
+      entity_category: diagnostic
+      icon: mdi:calendar-clock
+      groups: [implemented, telemetry, diagnostics]
+    - platform: sensor
+      register: days_to_inspection
+      name: Days Until Service
+      key: days_to_inspection
+      device_class: duration
+      unit_of_measurement: d
+      entity_category: diagnostic
+      icon: mdi:calendar-alert
+      groups: [implemented, telemetry, diagnostics]
+    - platform: sensor
+      register: days_until_device_lock
+      name: Days Until Lockout
+      key: days_until_device_lock
+      device_class: duration
+      unit_of_measurement: d
+      entity_category: diagnostic
+      icon: mdi:calendar-remove
+      groups: [implemented, telemetry, diagnostics]
+    - platform: sensor
+      register: supply_filter_dirt_level
+      name: Supply Filter Condition
+      key: supply_filter_pollution
+      entity_category: diagnostic
+      filters: [{ multiply: 0.1 }]
+      skip_updates: 20
+      icon: mdi:air-filter
+      groups: [implemented, telemetry, diagnostics, filters]
+    - platform: sensor
+      register: supply_filter_working_days
+      name: Supply Filter Operating Days
+      key: supply_filter_working_days
+      device_class: duration
+      unit_of_measurement: d
+      entity_category: diagnostic
+      skip_updates: 20
+      icon: mdi:calendar-clock
+      groups: [implemented, telemetry, diagnostics, filters]
+    - platform: sensor
+      register: extract_filter_dirt_level
+      name: Extract Filter Condition
+      key: extract_filter_pollution
+      entity_category: diagnostic
+      filters: [{ multiply: 0.1 }]
+      skip_updates: 20
+      icon: mdi:air-filter
+      groups: [implemented, telemetry, diagnostics, filters]
+    - platform: sensor
+      register: extract_filter_working_days
+      name: Extract Filter Operating Days
+      key: extract_filter_working_days
+      device_class: duration
+      unit_of_measurement: d
+      entity_category: diagnostic
+      skip_updates: 20
+      icon: mdi:calendar-clock
+      groups: [implemented, telemetry, diagnostics, filters]
+    - platform: sensor
+      register: secondary_heater_current_control
+      name: Secondary Heater Current Control
+      key: secondary_heater_current_control
+      entity_category: diagnostic
+      filters: [{ multiply: 0.1 }]
+      optional: true
+      icon: mdi:radiator
+      groups: [implemented, telemetry, diagnostics, heater, optional]
+    - platform: sensor
+      register: preheater_current_control
+      name: Preheater Current Control
+      key: preheater_current_control
+      entity_category: diagnostic
+      filters: [{ multiply: 0.1 }]
+      optional: true
+      icon: mdi:radiator-disabled
+      groups: [implemented, telemetry, diagnostics, heater, optional]
+    - platform: sensor
+      register: supply_fan_current_control
+      name: Supply Fan Current Control
+      key: supply_fan_speed
+      icon: mdi:fan-speed-1
+      groups: [implemented, telemetry, fan]
+    - platform: sensor
+      register: extract_fan_current_control
+      name: Extract Fan Current Control
+      key: extract_fan_speed
+      icon: mdi:fan-speed-1
+      groups: [implemented, telemetry, fan]
