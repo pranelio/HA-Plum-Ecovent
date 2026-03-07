@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0-b1] - 2026-03-07
+### Added
+- Protocol-first config flow: explicit connection type selection with `Modbus TCP` support and visible-but-disabled `Modbus RTU` path.
+- Register capability classification during setup probe with persisted buckets: `available_registers`, `non_responding_registers`, and `unsupported_registers`.
+- Modbus-level adapter validation step that combines TCP reachability with a bounded Modbus handshake/read sanity check.
+
+### Changed
+- Initial config flow now collects only required TCP connection inputs (`host`, `port`, `unit`); update interval and tuning remain in options flow.
+- Setup discovery now treats explicit available-register snapshots (including empty snapshots) as authoritative, preventing fallback probing noise.
+- Runtime payload now stores register support classification details for downstream setup/diagnostics use.
+- Config-flow translations updated to reflect the new multi-step protocol flow and clearer verification messaging.
+- Added an explicit transport seam in `ModbusClientManager` (`tcp` active now, `rtu` reserved for future implementation).
+- Register capability probing now enforces a global discovery deadline and startup timeout guard to avoid long setup hangs.
+- Options flow entity selection now aligns with discovered capabilities while preserving legacy override entries.
+- Entity toggle choices now keep options-managed number settings hidden, preserving the options-only settings policy.
+
+### Fixed
+- Verification now reports a dedicated `unit_no_response` path when adapter TCP connectivity succeeds but no Modbus response is returned for the selected address.
+- Discovery/entity setup no longer creates opportunistic entities when setup explicitly determined no available registers.
+- Coordinator partial-failure warnings now include sample failed registers to improve diagnostics versus generic count-only logs.
+
 ## [0.4.3] - 2026-03-03
 ### Fixed
 - Fixed config-flow progress state transitions so setup no longer gets stuck and now reliably reaches successful entry creation.

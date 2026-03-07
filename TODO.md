@@ -10,6 +10,8 @@ Current backlog for the integration.
 - [ ] Add more granular unit tests per platform (`sensor`, `binary_sensor`, `switch`, `number`) and consider hardware-in-the-loop tests.
 - [ ] Extend docs with more automation examples and screenshots.
 - [ ] Provide a small CLI utility to read/write registers outside Home Assistant.
+- [ ] Remove remaining `hass.data[DOMAIN][entry_id]` runtime fallbacks and use `ConfigEntry.runtime_data` consistently.
+- [ ] Re-audit `quality_scale.yaml` statuses against actual implementation/tests and correct any optimistic "done" markers.
 
 ## Home Assistant quality scale roadmap (self-assessed)
 
@@ -44,11 +46,22 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Document any Platinum rule exemptions (for non-HTTP integrations, e.g., websession injection not applicable).
 
 ## Feature roadmap
+- [ ] Refactor config flow for protocol-first setup:
+	- [ ] Ask for connection type first (`Modbus TCP` / `Modbus RTU`).
+	- [ ] Keep `Modbus RTU` visible but disabled (not implemented yet).
+	- [ ] For `Modbus TCP`, require only host, port, and unit address.
+	- [ ] Move `update_rate` out of config flow (options flow only).
+	- [ ] Do not request device name in config flow (use Home Assistant naming conventions).
 - [ ] Implement alarm register support (state/fault registers, severity mapping, and entity exposure).
 - [ ] Implement notification support for alarms (persistent notifications/events and automation-friendly metadata).
 - [ ] Add Home Assistant trigger support for alarms.
 - [x] Add feature discovery by reading optional registers and adapting entities.
 - [x] Add feature enable/disable controls in the options flow after setup.
+- [ ] Expand register discovery classification and retries:
+	- [ ] Build `available`, `non_responding`, and `unsupported` register lists during probe.
+	- [ ] Classify Modbus exception responses (illegal function/address/value/refused) as `unsupported`.
+	- [ ] Retry only `non_responding` registers with bounded timeout/retry policy (max 3 attempts).
+	- [ ] Create entities only from `available` registers; avoid noisy unavailable entities for other classes.
 - [ ] Add calculated sensor support (e.g., efficiency and other derived metrics where data quality allows).
 - [ ] Improve Modbus communication:
 	- [ ] Dynamic polling strategy based on enabled entities and feature usage.
