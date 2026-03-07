@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys, os
 # make custom_components importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -6,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import pytest
 
 from custom_components.plum_ecovent.modbus_client import ModbusClientManager
+from custom_components.plum_ecovent.modbus_client import _PymodbusNoiseFilter
 from custom_components.plum_ecovent.const import (
     CONF_CONNECTION_TYPE,
     CONF_HOST,
@@ -185,3 +187,50 @@ async def test_async_connect_rtu_not_implemented(caplog):
 
     assert result is False
     assert "Modbus RTU transport is not implemented yet" in caplog.text
+
+
+def test_pymodbus_noise_filter_suppresses_expected_spam():
+    """Filter should suppress known pymodbus parser noise lines only."""
+    noise_filter = _PymodbusNoiseFilter()
+
+    request_id_mismatch = logging.LogRecord(
+        name="pymodbus.logging",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="ERROR: request ask for id=1 but got id=160, Skipping.",
+        args=(),
+        exc_info=None,
+    )
+    recv_dump = logging.LogRecord(
+        name="pymodbus.logging",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg=">>>>> recv: 0x1 0x7 ... extra data:",
+        args=(),
+        exc_info=None,
+    )
+    regular_error = logging.LogRecord(
+        name="pymodbus.logging",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="Unexpected Modbus failure",
+        args=(),
+        exc_info=None,
+    )
+    integration_log = logging.LogRecord(
+        name="custom_components.plum_ecovent.modbus_client",
+        level=logging.WARNING,
+        pathname=__file__,
+        lineno=1,
+        msg="Modbus write failed after retries",
+        args=(),
+        exc_info=None,
+    )
+
+    assert noise_filter.filter(request_id_mismatch) is False
+    assert noise_filter.filter(recv_dump) is False
+    assert noise_filter.filter(regular_error) is True
+    assert noise_filter.filter(integration_log) is True

@@ -62,6 +62,7 @@ def test_sensor_async_update():
     key = build_definition_key(Def())
     coordinator = DummyCoordinator({key: 42})
     sensor = PlumEcoventSensor(manager, coordinator, entry, Def(), 0)
+    assert sensor._attr_name == "Register 0"
 
     loop = asyncio.new_event_loop()
     try:
@@ -147,6 +148,9 @@ def test_other_entities():
     bina = binary_mod.PlumEcoventBinarySensor(manager, coordinator, entry, binary_def)
     sw = switch_mod.PlumEcoventSwitch(manager, coordinator, entry, switch_def)
     num = number_mod.PlumEcoventNumber(manager, coordinator, entry, number_def)
+    assert bina._attr_name == binary_def.name
+    assert sw._attr_name == switch_def.name
+    assert num._attr_name == number_def.name
 
     loop = asyncio.new_event_loop()
     try:

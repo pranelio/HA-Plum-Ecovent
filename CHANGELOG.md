@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0-b2] - 2026-03-07
+### Changed
+- Switched default polling update rate to `5` seconds (`DEFAULT_UPDATE_RATE`) for new setups and fallback runtime behavior.
+- Updated entity naming behavior to avoid duplicated integration prefixes in Home Assistant entity IDs by relying on entity names with `has_entity_name = True`.
+
+### Fixed
+- Removed noisy `pymodbus.logging` parser spam (unit-id mismatch and raw frame dump lines) via a targeted logger filter while keeping normal error logs.
+- Added regression coverage for initial TCP setup fields, entity naming, and pymodbus noise-filter behavior.
+
 ## [0.5.0-b1] - 2026-03-07
 ### Added
 - Protocol-first config flow: explicit connection type selection with `Modbus TCP` support and visible-but-disabled `Modbus RTU` path.

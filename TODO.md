@@ -69,6 +69,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 	- [ ] Implement RTU transport behind the existing config-flow connection type option, then extend with automatic connection parameter detection where feasible.
 - [ ] Add `climate` entity support for temperature control where the device exposes writable setpoint/control registers.
 - [ ] Add `fan` entity support for fan levels/speeds where supported by the device model.
+- [ ] Fix entity naming/ID composition to avoid duplicated domain prefix patterns like `sensor.plum_ecovent_plum_ecovent_comfort_temperature`.
 - [ ] Implement remaining registers from the manufacturer list.
 - [ ] Add additional platforms (`select`, `text`, `button`, etc.) where they map cleanly to device capabilities.
 - [x] Expand documentation with clearer hardware and software setup instructions (wiring, bus setup, HA config, troubleshooting).

@@ -29,6 +29,34 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_PYMODBUS_NOISE_FILTER_INSTALLED = False
+
+
+class _PymodbusNoiseFilter(logging.Filter):
+    """Suppress known noisy pymodbus parser logs while keeping real errors."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        logger_name = getattr(record, "name", "")
+        if logger_name != "pymodbus.logging":
+            return True
+
+        message = record.getMessage()
+        normalized = message.lower()
+        if "request ask for id=" in normalized and "got id=" in normalized:
+            return False
+        if normalized.startswith(">>>>> recv:") or normalized.startswith(">>>>> send:"):
+            return False
+        if "extra data:" in normalized:
+            return False
+        return True
+
+
+def _install_pymodbus_noise_filter() -> None:
+    global _PYMODBUS_NOISE_FILTER_INSTALLED
+    if _PYMODBUS_NOISE_FILTER_INSTALLED:
+        return
+    logging.getLogger("pymodbus.logging").addFilter(_PymodbusNoiseFilter())
+    _PYMODBUS_NOISE_FILTER_INSTALLED = True
 
 
 class ModbusClientManager:
@@ -40,6 +68,7 @@ class ModbusClientManager:
     """
 
     def __init__(self, hass, config: dict) -> None:
+        _install_pymodbus_noise_filter()
         self.hass = hass
         self.config = config
         self._client = None

@@ -72,6 +72,8 @@ async def test_tcp_flow(monkeypatch):
     result2 = await flow.async_step_user(protocol_input)
     assert result2["type"] == "form"
     assert result2["step_id"] == "tcp"
+    tcp_schema_keys = {key.schema for key in result2["data_schema"].schema.keys()}
+    assert tcp_schema_keys == {CONF_HOST, CONF_PORT, CONF_UNIT}
 
     tcp_input = {
         CONF_HOST: "1.2.3.4",

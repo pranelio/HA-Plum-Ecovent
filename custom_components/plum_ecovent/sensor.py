@@ -67,7 +67,7 @@ class PlumEcoventSensor(CoordinatorEntity, SensorEntity):
         self._definition = definition
         self._key = build_definition_key(definition)
         name_slug = (getattr(definition, "key", None) or definition.name).replace(" ", "_").lower()
-        self._attr_name = f"{entry.title} {definition.name}"
+        self._attr_name = definition.name
         self._attr_unique_id = f"{entry.entry_id}_sensor_{definition.address}_{name_slug}_{idx}"
         self._state = None
         self._device_info = device_info or {
@@ -116,7 +116,7 @@ class PlumEcoventRetryCounterSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._manager = manager
         self._entry = entry
-        self._attr_name = f"{entry.title} Communication Retries"
+        self._attr_name = "Communication Retries"
         self._attr_unique_id = f"{entry.entry_id}_diagnostic_comm_retries"
         self._attr_icon = "mdi:counter"
         try:

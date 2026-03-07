@@ -23,7 +23,7 @@ DEFAULT_UNIT = 1
 
 # Update rate in seconds for polling registers
 CONF_UPDATE_RATE = "update_rate"
-DEFAULT_UPDATE_RATE = 30
+DEFAULT_UPDATE_RATE = 5
 
 # Optional entity override settings
 CONF_OPTIONAL_FORCE_ENABLE = "optional_force_enable"
@@ -44,4 +44,4 @@ CONF_DEVICE_INFO_PENDING_FETCH = "device_info_pending_fetch"
 CONF_DEVICE_INFO_FETCH_ATTEMPTED = "device_info_fetch_attempted"
 
 # Integration version (keep in sync with manifest.json)
-__version__ = "0.5.0-b1"
+__version__ = "0.5.0-b2"
