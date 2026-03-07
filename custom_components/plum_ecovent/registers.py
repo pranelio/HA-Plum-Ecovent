@@ -1,9 +1,9 @@
 """Register metadata loaded from the canonical YAML register map.
 
 Single source of truth:
-- vendor register map + semantics: docs/plum_modbus_register_map.yaml
+- vendor register map + semantics: custom_components/plum_ecovent/plum_modbus_register_map.yaml
 - integration entity metadata (platform mapping, keys, filters, groups, icons):
-  docs/plum_modbus_register_map.yaml -> integration.entities
+    plum_modbus_register_map.yaml -> integration.entities
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import yaml
 
 
-_REGISTER_MAP_PATH = Path(__file__).resolve().parents[2] / "docs" / "plum_modbus_register_map.yaml"
+_PACKAGED_REGISTER_MAP_PATH = Path(__file__).resolve().parent / "plum_modbus_register_map.yaml"
+_DEVELOPMENT_REGISTER_MAP_PATH = Path(__file__).resolve().parents[2] / "docs" / "plum_modbus_register_map.yaml"
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,17 @@ class SwitchDef:
 
 @lru_cache(maxsize=1)
 def _load_register_map() -> dict[str, Any]:
-    with _REGISTER_MAP_PATH.open("r", encoding="utf-8") as file_handle:
+    register_map_path = next(
+        (path for path in (_PACKAGED_REGISTER_MAP_PATH, _DEVELOPMENT_REGISTER_MAP_PATH) if path.exists()),
+        None,
+    )
+    if register_map_path is None:
+        raise FileNotFoundError(
+            "Register map YAML not found. Expected one of: "
+            f"{_PACKAGED_REGISTER_MAP_PATH} or {_DEVELOPMENT_REGISTER_MAP_PATH}"
+        )
+
+    with register_map_path.open("r", encoding="utf-8") as file_handle:
         parsed = yaml.safe_load(file_handle) or {}
     if not isinstance(parsed, dict):
         raise ValueError("Invalid register map format: expected top-level mapping")
