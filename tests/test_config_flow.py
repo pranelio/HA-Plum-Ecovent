@@ -516,6 +516,37 @@ async def test_probe_capabilities_respects_deadline(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_all_defined_addresses_includes_climate_control_registers(monkeypatch):
+    """Probe address list must include climate control registers even without standalone entities."""
+    import custom_components.plum_ecovent.config_flow as cf
+
+    registers_module = type(
+        "RegistersModule",
+        (),
+        {
+            "SENSORS": [type("Def", (), {"address": 201})()],
+            "BINARY_SENSORS": [],
+            "SWITCHES": [],
+            "NUMBERS": [type("Def", (), {"address": 93})()],
+        },
+    )
+
+    async def _fake_get_registers_module(_hass):
+        return registers_module
+
+    monkeypatch.setattr(cf, "async_get_registers_module", _fake_get_registers_module)
+
+    addresses = await cf._async_all_defined_addresses(None)
+
+    assert 59 in addresses
+    assert 69 in addresses
+    assert 78 in addresses
+    assert 114 in addresses
+    assert 201 in addresses
+    assert 93 in addresses
+
+
+@pytest.mark.asyncio
 async def test_options_flow_entity_choices_respect_discovery_and_preserve_overrides(monkeypatch):
     """Entity choices should honor discovered availability and hide legacy unavailable override ids."""
     from custom_components.plum_ecovent.config_flow import OptionsFlowHandler

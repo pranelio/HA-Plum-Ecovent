@@ -227,6 +227,24 @@ class PlumEcoventClimate(ClimateEntity):
             supported_features |= ClimateEntityFeature.PRESET_MODE
         self._attr_supported_features = supported_features
 
+        missing_controls: list[str] = []
+        if not (self._can_power_unit and self._can_control_fan_stage):
+            missing_controls.append("fan modes")
+        if not self._can_control_auto_mode:
+            missing_controls.append("auto hvac mode")
+        if not self._can_control_boost_mode:
+            missing_controls.append("boost preset")
+        if not self._can_set_humidity:
+            missing_controls.append("target humidity control")
+        if not self._can_read_current_humidity:
+            missing_controls.append("current humidity reading")
+        if missing_controls:
+            _LOGGER.warning(
+                "Climate entity %s created with limited capabilities; missing: %s",
+                self._attr_unique_id,
+                ", ".join(missing_controls),
+            )
+
         self._device_info = device_info or {
             "identifiers": {(DOMAIN, self._entry.entry_id)},
             "name": self._entry.title,
@@ -278,6 +296,38 @@ class PlumEcoventClimate(ClimateEntity):
             return None
         return int(response.registers[0])
 
+    async def _async_refresh_after_write(self) -> None:
+        if self._coordinator is not None and hasattr(self._coordinator, "async_request_refresh"):
+            await self._coordinator.async_request_refresh()
+
+    async def _async_verify_register_value(self, address: int, expected: int, context: str) -> None:
+        await self._async_refresh_after_write()
+        actual = await self._read_register(address)
+        if actual is None or int(actual) != int(expected):
+            _LOGGER.warning(
+                "Climate %s rejected %s change: expected register %s=%s, got %s",
+                self._attr_unique_id,
+                context,
+                address,
+                expected,
+                actual,
+            )
+            raise ValueError(f"Unit did not accept {context} change")
+
+    async def _async_verify_temperature_setpoint(self, target: int) -> None:
+        await self._async_refresh_after_write()
+        day_actual = await self._read_register(int(self._day_def.address))
+        night_actual = await self._read_register(int(self._night_def.address))
+        if day_actual is None or night_actual is None or int(day_actual) != target or int(night_actual) != target:
+            _LOGGER.warning(
+                "Climate %s rejected temperature change: expected day/night=%s, got day=%s night=%s",
+                self._attr_unique_id,
+                target,
+                day_actual,
+                night_actual,
+            )
+            raise ValueError("Unit did not accept target temperature change")
+
     async def async_set_temperature(self, **kwargs: Any) -> None:
         raw_target = kwargs.get(ATTR_TEMPERATURE)
         if raw_target is None:
@@ -289,9 +339,8 @@ class PlumEcoventClimate(ClimateEntity):
         if not (wrote_day and wrote_night):
             raise ValueError("Failed to write comfort temperature setpoint registers")
 
+        await self._async_verify_temperature_setpoint(target)
         self._attr_target_temperature = float(target)
-        if self._coordinator is not None and hasattr(self._coordinator, "async_request_refresh"):
-            await self._coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         if not (self._can_power_unit and self._can_control_fan_stage):
@@ -301,6 +350,7 @@ class PlumEcoventClimate(ClimateEntity):
             success = await self._manager.write_register(_UNIT_ON_OFF_REGISTER_ADDRESS, 0)
             if not success:
                 raise ValueError("Failed to turn off ERV")
+            await self._async_verify_register_value(_UNIT_ON_OFF_REGISTER_ADDRESS, 0, "fan off")
             self._attr_fan_mode = FAN_OFF
             return
 
@@ -312,6 +362,8 @@ class PlumEcoventClimate(ClimateEntity):
         set_mode = await self._manager.write_register(_FAN_MODE_REGISTER_ADDRESS, mode_value)
         if not (turned_on and set_mode):
             raise ValueError("Failed to write fan mode register")
+        await self._async_verify_register_value(_UNIT_ON_OFF_REGISTER_ADDRESS, 1, "fan mode")
+        await self._async_verify_register_value(_FAN_MODE_REGISTER_ADDRESS, mode_value, "fan mode")
         self._attr_fan_mode = fan_mode
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -321,15 +373,16 @@ class PlumEcoventClimate(ClimateEntity):
         if hvac_mode not in (HVACMode.AUTO, HVACMode.FAN_ONLY):
             raise ValueError(f"Unsupported HVAC mode: {hvac_mode}")
 
-        if hvac_mode == HVACMode.AUTO:
+        if hvac_mode in (HVACMode.AUTO, HVACMode.FAN_ONLY):
             turned_on = await self._async_ensure_unit_on()
             if not turned_on:
-                raise ValueError("Failed to turn on ERV before enabling auto mode")
+                raise ValueError("Failed to turn on ERV before changing HVAC mode")
 
         target = 1 if hvac_mode == HVACMode.AUTO else 0
         success = await self._manager.write_register(_AUTO_MODE_REGISTER_ADDRESS, target)
         if not success:
             raise ValueError("Failed to write auto mode register")
+        await self._async_verify_register_value(_AUTO_MODE_REGISTER_ADDRESS, target, "hvac mode")
         self._attr_hvac_mode = hvac_mode
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -348,6 +401,7 @@ class PlumEcoventClimate(ClimateEntity):
         success = await self._manager.write_register(_BOOST_MODE_REGISTER_ADDRESS, boost_value)
         if not success:
             raise ValueError("Failed to write boost mode register")
+        await self._async_verify_register_value(_BOOST_MODE_REGISTER_ADDRESS, boost_value, "preset mode")
         self._attr_preset_mode = preset_mode
 
     async def async_set_humidity(self, humidity: int) -> None:
@@ -359,9 +413,8 @@ class PlumEcoventClimate(ClimateEntity):
         if not success:
             raise ValueError("Failed to write target humidity register")
 
+        await self._async_verify_register_value(int(self._target_humidity_def.address), target_humidity, "humidity")
         self._attr_target_humidity = target_humidity
-        if self._coordinator is not None and hasattr(self._coordinator, "async_request_refresh"):
-            await self._coordinator.async_request_refresh()
 
     async def _async_ensure_unit_on(self) -> bool:
         if not self._can_power_unit:

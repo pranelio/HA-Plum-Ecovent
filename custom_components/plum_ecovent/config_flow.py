@@ -45,6 +45,8 @@ from .registers_loader import async_get_registers_module
 
 _LOGGER = logging.getLogger(__name__)
 
+_CLIMATE_REQUIRED_REGISTERS: tuple[int, ...] = (59, 69, 78, 114)
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Plum Ecovent."""
@@ -848,6 +850,7 @@ async def _async_all_defined_addresses(hass) -> list[int]:
     addresses: set[int] = set()
     for definition in [*registers.SENSORS, *registers.BINARY_SENSORS, *registers.SWITCHES, *registers.NUMBERS]:
         addresses.add(int(definition.address))
+    addresses.update(_CLIMATE_REQUIRED_REGISTERS)
     return sorted(addresses)
 
 

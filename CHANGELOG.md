@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.1] - 2026-03-07
+### Fixed
+- Improved climate control reliability for fan/HVAC/preset/humidity writes by waiting for coordinator refresh and verifying accepted register values after user changes.
+- Ensured non-off climate mode changes power on the unit first (including `FAN_ONLY` and `AUTO`) before writing control registers.
+- Added warning logs when climate entities are created with limited capabilities (missing fan modes, auto mode, boost preset, or humidity support) so unsupported controls are explicit in logs.
+- Fixed fan-mode UX consistency by enforcing full fan-mode mapping (`off`, `low`, `medium`, `high`) when ERV fan controls are supported.
+
 ## [0.5.0] - 2026-03-07
 ### Added
 - Added a capability-aware `climate` entity with HVAC mode (`AUTO`, `FAN_ONLY`), fan mode (`off`, `low`, `medium`, `high`), boost preset, and target humidity support.

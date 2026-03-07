@@ -28,7 +28,10 @@ class _DummyManager:
         }
 
     async def write_register(self, address, value):
-        self.writes.append((int(address), int(value)))
+        address = int(address)
+        value = int(value)
+        self.writes.append((address, value))
+        self._read_values[address] = value
         return True
 
     async def read_holding_registers(self, address, count):
@@ -164,6 +167,12 @@ async def test_climate_auto_and_boost_turn_on_unit_when_off():
 
     manager.writes.clear()
     manager._read_values[59] = 0
+    await climate.async_set_hvac_mode("fan_only")
+    assert (59, 1) in manager.writes
+    assert (78, 0) in manager.writes
+
+    manager.writes.clear()
+    manager._read_values[59] = 0
     await climate.async_set_preset_mode("boost")
     assert (59, 1) in manager.writes
     assert (114, 1) in manager.writes
@@ -201,3 +210,38 @@ async def test_climate_capabilities_disable_unsupported_controls():
     assert climate._attr_hvac_modes == ["fan_only"]
     assert climate._attr_fan_modes == []
     assert climate._attr_preset_modes == ["none"]
+
+
+@pytest.mark.asyncio
+async def test_climate_raises_when_unit_rejects_write_after_refresh():
+    manager = _DummyManager()
+
+    async def _write_register_without_effect(address, value):
+        manager.writes.append((int(address), int(value)))
+        return True
+
+    manager.write_register = _write_register_without_effect
+
+    day_def = _definition(93, "comfort_temperature_day", "Comfort Temperature (Day)", min_value=8, max_value=30)
+    night_def = _definition(94, "comfort_temperature_night", "Comfort Temperature (Night)", min_value=8, max_value=30)
+    target_humidity_def = _definition(83, "max_humidity", "Relative Humidity Setpoint")
+    current_humidity_def = _definition(84, "humidity", "Indoor Relative Humidity")
+    current_temp_def = _definition(203, "leading_temperature", "Leading Air Temperature")
+
+    coordinator = _DummyCoordinator({build_definition_key(current_temp_def): 21.0})
+    entry = SimpleNamespace(entry_id="entry123", title="Plum")
+
+    climate = PlumEcoventClimate(
+        manager=manager,
+        coordinator=coordinator,
+        entry=entry,
+        day_def=day_def,
+        night_def=night_def,
+        current_temp_def=current_temp_def,
+        target_humidity_def=target_humidity_def,
+        current_humidity_def=current_humidity_def,
+        device_info=None,
+    )
+
+    with pytest.raises(ValueError, match="Unit did not accept fan mode change"):
+        await climate.async_set_fan_mode("high")
