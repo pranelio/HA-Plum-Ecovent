@@ -13,19 +13,19 @@ As coverage grows, add new entries grouped by vendor.
 
 | Model | Status | Notes |
 |---|---|---|
-| Easy C150 | Likely support, not tested |  |
-| Easy C150E | Likely support, not tested | Enthalpy variant of Easy C series. |
-| Easy C200 | Likely support, not tested |  |
-| Easy C200E | Likely support, not tested | Enthalpy variant of Easy C series. |
-| Easy C250 | Likely support, not tested |  |
-| Easy C250E | Likely support, not tested | Enthalpy variant of Easy C series. |
-| Easy V200 | Likely support, not tested |  |
-| Easy V200E | Likely support, not tested | Enthalpy variant of Easy V series. |
-| Easy V400 | Likely support, not tested |  |
-| Easy V400E | Likely support, not tested | Enthalpy variant of Easy V series. |
-| Easy V500 | Likely support, not tested |  |
-| Easy V500E | Likely support, not tested | Enthalpy variant of Easy V series. |
-| Easy V600 | Likely support, not tested |  |
+| Easy C150 | Supported (untested) |  |
+| Easy C150E | Supported (untested) | Enthalpy variant of Easy C series. |
+| Easy C200 | Supported (untested) |  |
+| Easy C200E | Supported (untested) | Enthalpy variant of Easy C series. |
+| Easy C250 | Supported (untested) |  |
+| Easy C250E | Supported (untested) | Enthalpy variant of Easy C series. |
+| Easy V200 | Supported (untested) |  |
+| Easy V200E | Supported (untested) | Enthalpy variant of Easy V series. |
+| Easy V400 | Supported (untested) |  |
+| Easy V400E | Supported (untested) | Enthalpy variant of Easy V series. |
+| Easy V500 | Supported (untested) |  |
+| Easy V500E | Supported (untested) | Enthalpy variant of Easy V series. |
+| Easy V600 | Supported (untested) |  |
 
 ## Vendor: Rotenso
 
@@ -34,7 +34,7 @@ but exact public model list is still pending confirmation.
 
 | Model | Status | Notes |
 |---|---|---|
-| Rotenso residential HRV/ERV lineup (models TBD) | Likely support, not tested |  |
+| Rotenso residential HRV/ERV lineup (models TBD) | Highly likely supported |  |
 
 ## Vendor: ProAir
 
@@ -43,7 +43,7 @@ but complete public model list is still pending confirmation.
 
 | Model | Status | Notes |
 |---|---|---|
-| ProAir PA700LI | Likely support, not tested |  |
+| ProAir PA700LI | Supported (untested) |  |
 
 
 ## Contribution format
@@ -63,3 +63,5 @@ When adding a new tested device, use this structure:
 - **Supported (untested)**: Expected to work from register compatibility, but not yet field-validated.
 - **Highly likely supported**: Strong evidence of shared controller/register backbone, but not yet directly validated in this repo.
 - **Partial**: Core features work, with known limitations.
+
+Tested status reflects at least basic setup + live polling verification; write-control validation may still vary by firmware and installer configuration.

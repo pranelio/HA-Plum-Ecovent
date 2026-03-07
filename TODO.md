@@ -10,6 +10,8 @@ Current backlog for the integration.
 - [ ] Add more granular unit tests per platform (`sensor`, `binary_sensor`, `switch`, `number`) and consider hardware-in-the-loop tests.
 - [ ] Extend docs with more automation examples and screenshots.
 - [ ] Provide a small CLI utility to read/write registers outside Home Assistant.
+- [ ] Remove remaining `hass.data[DOMAIN][entry_id]` runtime fallbacks and use `ConfigEntry.runtime_data` consistently.
+- [ ] Re-audit `quality_scale.yaml` statuses against actual implementation/tests and correct any optimistic "done" markers.
 
 ## Home Assistant quality scale roadmap (self-assessed)
 
@@ -25,7 +27,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 ### Silver milestone (not reached)
 - [ ] Increase measured overall integration coverage to >95% and keep it enforced in CI.
 - [ ] Define `PARALLEL_UPDATES` per platform to control concurrent updates.
-- [ ] Improve availability logging to log once on disconnect and once on recovery (avoid log spam).
+- [x] Improve availability logging to log once on disconnect and once on recovery (avoid log spam).
 - [ ] Verify/document reauth rule exemption (no authentication flow for local Modbus device).
 - [ ] Expand docs with explicit installation/configuration parameter reference.
 
@@ -44,12 +46,34 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Document any Platinum rule exemptions (for non-HTTP integrations, e.g., websession injection not applicable).
 
 ## Feature roadmap
-- [ ] Implement registers for alarms.
-- [ ] Implement alarm notifications.
+- [x] Refactor config flow for protocol-first setup:
+	- [x] Ask for connection type first (`Modbus TCP` / `Modbus RTU`).
+	- [x] Keep `Modbus RTU` visible but disabled (not implemented yet).
+	- [x] For `Modbus TCP`, require only host, port, and unit address.
+	- [x] Move `update_rate` out of config flow (options flow only).
+	- [x] Do not request device name in config flow (use Home Assistant naming conventions).
+- [ ] Implement alarm register support (state/fault registers, severity mapping, and entity exposure).
+- [ ] Implement notification support for alarms (persistent notifications/events and automation-friendly metadata).
+- [ ] Add Home Assistant trigger support for alarms.
 - [x] Add feature discovery by reading optional registers and adapting entities.
 - [x] Add feature enable/disable controls in the options flow after setup.
+- [x] Expand register discovery classification and retries:
+	- [x] Build `available`, `non_responding`, and `unsupported` register lists during probe.
+	- [x] Classify Modbus exception responses (illegal function/address/value/refused) as `unsupported`.
+	- [x] Retry only `non_responding` registers with bounded timeout/retry policy (max 3 attempts).
+	- [x] Create entities only from `available` registers; avoid noisy unavailable entities for other classes.
+- [ ] Add calculated sensor support (e.g., efficiency and other derived metrics where data quality allows).
+- [ ] Improve Modbus communication:
+	- [ ] Dynamic polling strategy based on enabled entities and feature usage.
+	- [ ] Batch/multi-register reads where possible to reduce call count and bus overhead.
+	- [ ] Implement RTU transport behind the existing config-flow connection type option, then extend with automatic connection parameter detection where feasible.
+- [ ] Add `climate` entity support for temperature control where the device exposes writable setpoint/control registers.
+- [ ] Add `fan` entity support for fan levels/speeds where supported by the device model.
 - [ ] Implement remaining registers from the manufacturer list.
-- [ ] Add additional platforms (`select`, `text`, `button`, etc.) if needed.
+- [ ] Add additional platforms (`select`, `text`, `button`, etc.) where they map cleanly to device capabilities.
+- [x] Expand documentation with clearer hardware and software setup instructions (wiring, bus setup, HA config, troubleshooting).
+- [ ] Add ESPHome device support with fallback behavior for lost communication with Home Assistant.
+- [ ] Provide an ESPHome configuration mechanism/template to generate usable baseline configs, including fallback settings.
 
 ## Completed
 - [x] Introduce a `DataUpdateCoordinator` to centralize polling and connection management.
@@ -59,5 +83,8 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [x] Provide a migration/cleanup guide for updated `unique_id` formats.
 - [x] Add options flow control to adjust `update_rate` post-setup.
 - [x] Maintain a `__version__` constant, release tags, and changelog.
+- [x] Use `docs/plum_modbus_register_map.yaml` as canonical runtime source and remove duplicate register-map markdown source.
+- [x] Align runtime entity names in YAML with HVAC naming conventions and fix Extract/Exhaust label mapping.
+- [x] Add regression tests/docs for canonical English naming baseline with translation-aware guidance.
 
 See `README.md` for usage notes.

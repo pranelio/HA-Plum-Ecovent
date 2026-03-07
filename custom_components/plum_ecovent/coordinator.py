@@ -92,6 +92,7 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
         self._cycle += 1
         successful_reads = 0
         failed_reads = 0
+        failed_registers: list[str] = []
         for definition in self._defs:
             key = self._key(definition)
             skip = getattr(definition, "skip_updates", None)
@@ -102,6 +103,8 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
             if response is None or not hasattr(response, "registers"):
                 results[key] = None
                 failed_reads += 1
+                if len(failed_registers) < 5:
+                    failed_registers.append(f"{int(definition.address)}:{getattr(definition, 'name', 'unknown')}")
                 continue
 
             raw = response.registers[0]
@@ -125,9 +128,10 @@ class PlumEcoventCoordinator(DataUpdateCoordinator):
         if failed_reads:
             if not self._logged_partial_failure:
                 _LOGGER.warning(
-                    "Coordinator update completed with partial failures: %s/%s reads failed",
+                    "Coordinator partial failures: %s/%s reads failed; sample failed registers=%s",
                     failed_reads,
                     successful_reads + failed_reads,
+                    failed_registers,
                 )
                 self._logged_partial_failure = True
             self._logged_total_failure = False

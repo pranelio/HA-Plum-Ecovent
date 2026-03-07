@@ -12,6 +12,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
 from .const import (
+    CONF_AVAILABLE_REGISTERS,
+    CONF_NON_RESPONDING_REGISTERS,
+    CONF_UNSUPPORTED_REGISTERS,
     DOMAIN,
     CONF_UPDATE_RATE,
     DEFAULT_UPDATE_RATE,
@@ -92,6 +95,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "definitions": discovered_definitions,
         "discovered_entities": discovered_entities,
+        "register_support": {
+            "available": list(config.get(CONF_AVAILABLE_REGISTERS, config.get(CONF_RESPONDING_REGISTERS, [])) or []),
+            "non_responding": list(config.get(CONF_NON_RESPONDING_REGISTERS, []) or []),
+            "unsupported": list(config.get(CONF_UNSUPPORTED_REGISTERS, []) or []),
+        },
         "device_info": _build_device_info(entry, config),
     }
     entry.runtime_data = runtime_data
@@ -246,7 +254,11 @@ async def _async_discover_definitions(
     }
 
     discovered: dict[str, list[Any]] = {}
-    responding_config = config.get(CONF_RESPONDING_REGISTERS, []) or []
+    has_available_snapshot = (
+        CONF_AVAILABLE_REGISTERS in config
+        or CONF_RESPONDING_REGISTERS in config
+    )
+    responding_config = config.get(CONF_AVAILABLE_REGISTERS, config.get(CONF_RESPONDING_REGISTERS, [])) or []
     responding_registers: set[int] = set()
     for value in responding_config:
         try:
@@ -263,7 +275,7 @@ async def _async_discover_definitions(
             sorted(forced_entities & disabled_entities),
         )
 
-    has_probe_snapshot = bool(responding_registers)
+    has_probe_snapshot = has_available_snapshot
 
     for platform_name, definitions in by_platform.items():
         entity_definition_id = getattr(registers_module, "entity_definition_id")

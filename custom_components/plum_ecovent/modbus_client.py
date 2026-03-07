@@ -21,8 +21,11 @@ except Exception:  # pymodbus not installed in test environments
         pass
 
 from .const import (
+    CONF_CONNECTION_TYPE,
     CONF_HOST,
     CONF_PORT,
+    CONNECTION_TYPE_RTU,
+    CONNECTION_TYPE_TCP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +43,7 @@ class ModbusClientManager:
         self.hass = hass
         self.config = config
         self._client = None
+        self.transport = str(self.config.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_TCP) or CONNECTION_TYPE_TCP).lower()
         # unit id (slave address)
         from .const import DEFAULT_UNIT, CONF_UNIT
         self.unit = int(self.config.get(CONF_UNIT, DEFAULT_UNIT))
@@ -98,6 +102,12 @@ class ModbusClientManager:
         """Create and connect the underlying pymodbus async client."""
         if self._closing:
             return False
+        if self.transport == CONNECTION_TYPE_RTU:
+            _LOGGER.error("Modbus RTU transport is not implemented yet")
+            return False
+        if self.transport != CONNECTION_TYPE_TCP:
+            _LOGGER.error("Unsupported Modbus transport '%s'", self.transport)
+            return False
         try:
                 # dynamic import of the async client class - pymodbus has moved
             # names across releases.  We try the known locations in order and
@@ -138,10 +148,16 @@ class ModbusClientManager:
                 )
                 return False
 
-            # always use TCP; serial/RTU removed
             host = self.config.get(CONF_HOST)
             port = int(self.config.get(CONF_PORT, 502))
-            self._client = AsyncModbusTcpClient(host=host, port=port)
+            self._client = self._build_client(
+                host=host,
+                port=port,
+                async_modbus_tcp_client=AsyncModbusTcpClient,
+                async_modbus_serial_client=AsyncModbusSerialClient,
+            )
+            if self._client is None:
+                return False
 
             connect = getattr(self._client, "connect", None)
             if connect is not None:
@@ -159,6 +175,25 @@ class ModbusClientManager:
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected error creating Modbus client")
             return False
+
+    def _build_client(
+        self,
+        *,
+        host: Any,
+        port: int,
+        async_modbus_tcp_client: Any,
+        async_modbus_serial_client: Any,
+    ) -> Any | None:
+        """Build transport-specific pymodbus client (TCP now, RTU later)."""
+        if self.transport == CONNECTION_TYPE_TCP:
+            return async_modbus_tcp_client(host=host, port=port)
+
+        if self.transport == CONNECTION_TYPE_RTU:
+            _LOGGER.error("Modbus RTU transport is not implemented yet")
+            return None
+
+        _LOGGER.error("Unsupported Modbus transport '%s'", self.transport)
+        return None
 
     async def async_close(self) -> None:
         """Close the underlying client connection."""

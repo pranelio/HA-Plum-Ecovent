@@ -9,37 +9,46 @@
       "connection_timeout": "Connection timed out. Verify host, port, and device network access",
       "connection_refused": "Connection refused. Verify the Modbus TCP port and that the device is online",
       "invalid_host": "Host name or IP address is invalid or cannot be resolved",
+      "invalid_connection_type": "Select a valid connection type",
       "invalid_port": "Port must be between 1 and 65535",
+      "rtu_not_supported": "Modbus RTU setup is not implemented yet",
       "invalid_unit": "Modbus Address must be between 1 and 247",
+      "unit_no_response": "Adapter is reachable but no Modbus response was received for the selected address",
       "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
       "probe_failed": "Could not read any supported registers from the device"
     },
     "step": {
       "user": {
         "title": "Plum Ecovent setup",
-        "description": "Step 1/3: Enter Modbus TCP adapter and polling parameters.",
+        "description": "Step 1/4: Select connection type.",
+        "data": {
+          "connection_type": "Connection type"
+        },
+        "data_description": {
+          "connection_type": "Select Modbus TCP for current support. Modbus RTU is planned for a future release."
+        }
+      },
+      "tcp": {
+        "title": "Modbus TCP settings",
+        "description": "Step 2/4: Enter adapter connection details.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "unit": "Modbus Address",
-          "update_rate": "Update interval (seconds)",
-          "name": "Name"
+          "unit": "Modbus Address"
         },
         "data_description": {
           "host": "IP address or hostname of the Modbus TCP gateway.",
           "port": "TCP port exposed by the gateway (default 502).",
-          "unit": "Modbus slave address of the ventilation controller.",
-          "update_rate": "Polling interval in seconds.",
-          "name": "Display name for the Home Assistant device."
+          "unit": "Modbus slave address of the ventilation controller."
         }
       },
       "verify_adapter": {
         "title": "Verify adapter",
-        "description": "Step 2/3: Validating TCP reachability for {host}:{port}."
+        "description": "Step 3/4: Validating TCP reachability and Modbus response for {host}:{port}."
       },
       "probe_registers": {
         "title": "Probe device registers",
-        "description": "Step 3/3: Probing available device registers."
+        "description": "Step 4/4: Probing and classifying device registers."
       }
     },
     "progress": {
@@ -75,7 +84,6 @@
         "data": {
           "host": "Host",
           "port": "Port",
-          "name": "Name",
           "update_rate": "Update interval (seconds)",
           "unit": "Modbus Address"
         }

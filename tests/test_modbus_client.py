@@ -6,7 +6,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import pytest
 
 from custom_components.plum_ecovent.modbus_client import ModbusClientManager
-from custom_components.plum_ecovent.const import CONF_HOST, CONF_PORT, CONF_UNIT
+from custom_components.plum_ecovent.const import (
+    CONF_CONNECTION_TYPE,
+    CONF_HOST,
+    CONF_PORT,
+    CONF_UNIT,
+    CONNECTION_TYPE_RTU,
+)
 
 
 class DummyClient:
@@ -167,3 +173,15 @@ async def test_read_write_no_unit():
     ok = await mgr.write_register(7, 33)
     assert ok is True
     assert mgr._client.record[1] == (7, 33)
+
+
+@pytest.mark.asyncio
+async def test_async_connect_rtu_not_implemented(caplog):
+    """RTU transport path is intentionally blocked until implemented."""
+    mgr = ModbusClientManager(None, {CONF_CONNECTION_TYPE: CONNECTION_TYPE_RTU})
+    caplog.set_level("ERROR")
+
+    result = await mgr.async_connect()
+
+    assert result is False
+    assert "Modbus RTU transport is not implemented yet" in caplog.text
