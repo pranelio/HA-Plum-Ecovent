@@ -7,7 +7,7 @@ import pytest
 # make repo root available
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from custom_components.plum_ecovent import _async_discover_definitions
+from custom_components.plum_ecovent import _async_discover_definitions, _notification_binary_sensor_definitions
 from custom_components.plum_ecovent.const import (
     CONF_OPTIONAL_DISABLE,
     CONF_OPTIONAL_FORCE_ENABLE,
@@ -136,3 +136,37 @@ async def test_discovery_empty_snapshot_skips_fallback_probing():
 
     assert all_selected == []
     assert manager.calls == []
+
+
+def test_problem_diagnostic_binary_sensors_are_moved_to_notifications():
+    from custom_components.plum_ecovent import registers
+
+    discovered = {
+        "sensor": [],
+        "switch": [],
+        "number": [],
+        "binary_sensor": list(registers.BINARY_SENSORS),
+    }
+
+    notification_defs = _notification_binary_sensor_definitions(discovered)
+    remaining_keys = {getattr(definition, "key", None) for definition in discovered["binary_sensor"]}
+    notification_keys = {getattr(definition, "key", None) for definition in notification_defs}
+
+    assert notification_defs
+    assert all(bool(getattr(definition, "notification", False)) for definition in notification_defs)
+    assert all(str(getattr(definition, "device_class", "")) == "problem" for definition in notification_defs)
+    assert "secondary_heater_overtemperature" in notification_keys
+    assert "preheater_overtemperature" in notification_keys
+    assert "supply_filter_replacement_needed" in notification_keys
+    assert "extract_filter_replacement_needed" in notification_keys
+    assert "supply_fan_status" in remaining_keys
+    assert "heat_exchanger_regeneration" in remaining_keys
+    assert "secondary_heater_status" in remaining_keys
+    assert all(not bool(getattr(definition, "notification", False)) for definition in discovered["binary_sensor"])
+    assert all(
+        not (
+            str(getattr(definition, "device_class", "")) == "problem"
+            and str(getattr(definition, "entity_category", "")) == "diagnostic"
+        )
+        for definition in discovered["binary_sensor"]
+    )

@@ -28,16 +28,25 @@ The goal is predictable, high-quality, low-risk contributions with clean archite
 - Domain: `plum_ecovent`.
 - Runtime state belongs in `ConfigEntry.runtime_data` (not ad-hoc global storage).
 - Use `DataUpdateCoordinator` for polling, connectivity transitions, and coordinated refresh.
-- Platform modules (`sensor`, `binary_sensor`, `switch`, `number`) should be thin adapters over shared models/coordinator data.
+- Platform modules (`sensor`, `binary_sensor`, `switch`, `number`, `climate`, `notify`) should be thin adapters over shared models/coordinator data.
 
 ### 3.2 Modbus responsibilities
 
 - Keep transport/client logic in `modbus_client.py`.
 - Keep register catalog and metadata in `registers.py`.
 - Keep entity construction logic deterministic from register metadata + discovered capabilities.
+- Keep feature exposure capability-aware and safe:
+  - only expose climate/notify controls supported by discovered available registers,
+  - hide unsupported controls instead of exposing broken entities/actions.
 - Treat Modbus exception responses distinctly from transport failures:
   - transport timeout/no response => non-responding path
   - explicit Modbus exception (e.g., illegal function/address/value) => unsupported path
+
+### 3.4 Notification routing
+
+- Notification routing must be explicit in `integration.entities` metadata (`notification: true`).
+- Do not infer notification routing from `device_class` or naming heuristics.
+- Entities routed to notify should not be created as normal device-page entities.
 
 ### 3.3 Config flow and options flow
 
@@ -76,12 +85,13 @@ The goal is predictable, high-quality, low-risk contributions with clean archite
 
 ## 7) Documentation standards
 
-When behavior, configuration, or capabilities change, update docs in the same change set:
+When behavior, configuration, or capabilities change, documentation updates are **required in the same change set**:
 
 - `README.md` for user-facing setup/usage changes.
 - `CHANGELOG.md` for release-visible changes.
 - `docs/*` for protocol/device/connection specifics when relevant.
 - Keep wording concrete (what changed, why, impact, migration if any).
+- Do not defer documentation to a follow-up PR for shipped behavior changes.
 
 ## 8) Versioning and release hygiene
 
@@ -102,7 +112,7 @@ During coding:
 After coding:
 - Run relevant tests.
 - Re-check for lint/type issues in changed files.
-- Verify docs/version updates if applicable.
+- Verify docs/version updates are complete before marking done.
 - Summarize assumptions, risks, and follow-up items.
 
 ## 10) Definition of done

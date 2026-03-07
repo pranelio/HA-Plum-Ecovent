@@ -34,7 +34,7 @@ from .coordinator import PlumEcoventCoordinator
 from .registers_loader import async_get_registers_module
 
 # Platforms to set up for this integration
-PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
+PLATFORMS = ["sensor", "switch", "binary_sensor", "number", "climate", "notify"]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     registers = await async_get_registers_module(hass)
     discovered_definitions = await _async_discover_definitions(manager, registers, config)
+    notification_definitions = _notification_binary_sensor_definitions(discovered_definitions)
     discovered_entities = {
         platform_name: [registers.entity_definition_id(platform_name, definition) for definition in definitions]
         for platform_name, definitions in discovered_definitions.items()
@@ -103,6 +104,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         },
         "device_info": _build_device_info(entry, config),
     }
+
+    if notification_definitions:
+        runtime_data["notification_definitions"] = notification_definitions
+
     entry.runtime_data = runtime_data
     hass.data[DOMAIN][entry.entry_id] = runtime_data
 
@@ -241,6 +246,23 @@ def _loaded_runtime_entries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
             if isinstance(payload, dict):
                 loaded[str(entry_id)] = payload
     return loaded
+
+
+def _notification_binary_sensor_definitions(discovered_definitions: dict[str, list[Any]]) -> list[Any]:
+    binary_defs = list(discovered_definitions.get("binary_sensor", []))
+    notify_defs: list[Any] = []
+    keep_defs: list[Any] = []
+
+    for definition in binary_defs:
+        notify_flag = bool(getattr(definition, "notification", False))
+
+        if notify_flag:
+            notify_defs.append(definition)
+        else:
+            keep_defs.append(definition)
+
+    discovered_definitions["binary_sensor"] = keep_defs
+    return notify_defs
 
 
 async def _async_discover_definitions(

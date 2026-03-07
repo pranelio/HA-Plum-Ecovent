@@ -450,6 +450,7 @@ integration:
       key: supply_filter_replacement_needed
       device_class: problem
       entity_category: diagnostic
+      notification: true
       skip_updates: 5
       icon: mdi:air-filter
       groups: [implemented, hvac, diagnostics, filters]
@@ -459,6 +460,7 @@ integration:
       key: extract_filter_replacement_needed
       device_class: problem
       entity_category: diagnostic
+      notification: true
       skip_updates: 5
       icon: mdi:air-filter
       groups: [implemented, hvac, diagnostics, filters]
@@ -476,6 +478,7 @@ integration:
       key: secondary_heater_overtemperature
       device_class: problem
       entity_category: diagnostic
+      notification: true
       optional: true
       icon: mdi:alert-circle
       groups: [implemented, hvac, diagnostics, heater, optional]
@@ -493,6 +496,7 @@ integration:
       key: preheater_overtemperature
       device_class: problem
       entity_category: diagnostic
+      notification: true
       optional: true
       icon: mdi:alert-circle
       groups: [implemented, hvac, diagnostics, heater, optional]
@@ -517,18 +521,6 @@ integration:
       key: on_off
       icon: mdi:power
       groups: [implemented, hvac, control]
-    - platform: switch
-      register: auto_mode_enable
-      name: Auto Mode Enable
-      key: auto_mode
-      icon: mdi:autorenew
-      groups: [implemented, hvac, control, automation]
-    - platform: switch
-      register: boost_mode
-      name: Boost Mode
-      key: boost_mode
-      icon: mdi:rocket-launch-outline
-      groups: [implemented, hvac, control, boost]
     - platform: switch
       register: additional_equipment_enable_mask
       name: Additional Equipment Enable Mask

@@ -1,7 +1,7 @@
 {
   "domain": "plum_ecovent",
   "name": "Plum ecoVENT",
-  "version": "0.5.0-b3",
+  "version": "0.5.0-b4",
   "documentation": "https://github.com/pranelio/HA-Plum-Ecovent",
   "brand": "plum_ecovent",
   "iot_class": "local_polling",
@@ -13,5 +13,5 @@
   "dependencies": [],
   "codeowners": ["@pranelio"],
   "config_flow": true,
-  "platforms": ["sensor", "switch", "binary_sensor", "number"]
+  "platforms": ["sensor", "switch", "binary_sensor", "number", "climate", "notify"]
 }

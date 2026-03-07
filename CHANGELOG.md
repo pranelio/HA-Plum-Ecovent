@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0-b4] - 2026-03-07
+### Added
+- Added a `climate` entity with read/write support for fan stages (`stage_1`, `stage_2`, `stage_3`) and target humidity.
+- Added a Home Assistant `notify` entity that surfaces diagnostic alarm states (problem-class binary conditions only) as persistent notifications, including auto-dismiss on recovery.
+
+### Changed
+- Climate target temperature now writes both day and night comfort setpoint registers; current temperature/humidity and min/max temperature are sourced from canonical YAML-backed register metadata.
+- Removed standalone `Auto Mode Enable` and `Boost Mode` switch entities because those controls are now handled by the climate entity (HVAC mode + preset mode).
+- Notification routing is now explicit YAML metadata only (`notification: true`); entities marked for notifications are not created on the device page.
+- Updated README and developer docs to document climate-mode behavior and explicit YAML-driven notify routing.
+- Climate now turns the ERV on automatically before enabling `AUTO` HVAC mode or `Boost` preset when the unit is off, and climate capabilities are exposed dynamically based on safe available controls.
+
 ## [0.5.0-b3] - 2026-03-07
 ### Changed
 - Updated release metadata to `0.5.0-b3` in `manifest.json` and `const.py`.

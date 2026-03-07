@@ -9,6 +9,11 @@ Developer-only reference material for this integration.
 `plum_modbus_register_map.yaml` is the canonical register source used by the integration runtime loader (`custom_components/plum_ecovent/registers.py`).
 `integration.entities` should reference canonical entries by `register` (name key from top-level `registers`) and keep only HA-specific metadata.
 
+### Notification routing metadata
+- Binary-sensor entries intended for notify-platform handling must set `notification: true` in `integration.entities`.
+- Notification-marked binary sensors are routed to the `notify` platform and are not created as device-page binary_sensor entities.
+- Keep notification intent explicit in YAML; routing is not inferred from `device_class`.
+
 ### Naming and translations
 - Canonical names in `integration.entities` are the English baseline used for runtime metadata consistency and tests.
 - Localized display text for other languages should be implemented through Home Assistant translations, not by changing register keys or runtime structure.

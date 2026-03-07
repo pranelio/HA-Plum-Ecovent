@@ -26,6 +26,7 @@ class BinarySensorDef:
     key: Optional[str] = None
     device_class: Optional[str] = None
     entity_category: Optional[str] = None
+    notification: bool = False
     skip_updates: Optional[int] = None
     optional: bool = False
     icon: Optional[str] = None
@@ -221,6 +222,7 @@ def _build_binary_sensor_def(item: dict[str, Any]) -> BinarySensorDef:
         key=item.get("key"),
         device_class=item.get("device_class"),
         entity_category=item.get("entity_category"),
+        notification=bool(item.get("notification", False)),
         skip_updates=item.get("skip_updates"),
         optional=bool(item.get("optional", False)),
         icon=item.get("icon"),
