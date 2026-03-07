@@ -180,6 +180,7 @@ class PlumEcoventClimate(ClimateEntity):
         can_read_current_humidity: bool = True,
         device_info=None,
     ) -> None:
+        super().__init__()
         self._manager = manager
         self._coordinator = coordinator
         self._entry = entry
