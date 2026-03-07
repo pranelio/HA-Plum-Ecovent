@@ -41,6 +41,7 @@ from .const import (
 from .coordinator import build_definition_key
 from .device_info import decode_utf8_registers, format_firmware
 from .modbus_client import ModbusClientManager
+from .registers_loader import async_get_registers_module
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -331,6 +332,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self._device_settings_group: str | None = None
 
     async def async_step_init(self, user_input=None):
+        if hasattr(self, "hass") and self.hass is not None:
+            try:
+                await async_get_registers_module(self.hass)
+            except Exception:
+                _LOGGER.debug("Unable to pre-load registers module for options flow", exc_info=True)
+
         if user_input is not None:
             action = user_input.get(CONF_OPTIONS_ACTION)
             if action == "connection":
@@ -783,7 +790,7 @@ async def _async_probe_register_capabilities(
         return {"available": [], "non_responding": [], "unsupported": []}
 
     try:
-        addresses = _all_defined_addresses()
+        addresses = await _async_all_defined_addresses(hass)
         available: set[int] = set()
         unsupported: set[int] = set()
         pending_non_responding: set[int] = set(addresses)
@@ -835,8 +842,8 @@ async def _async_probe_register_capabilities(
         await manager.async_close()
 
 
-def _all_defined_addresses() -> list[int]:
-    from . import registers
+async def _async_all_defined_addresses(hass) -> list[int]:
+    registers = await async_get_registers_module(hass)
 
     addresses: set[int] = set()
     for definition in [*registers.SENSORS, *registers.BINARY_SENSORS, *registers.SWITCHES, *registers.NUMBERS]:
@@ -948,7 +955,7 @@ async def _async_validate_modbus_connection(
         return "cannot_connect"
 
     try:
-        probe_addresses = [16, *_all_defined_addresses()[:3]]
+        probe_addresses = [16, *(await _async_all_defined_addresses(hass))[:3]]
         attempts = max(1, int(retries) + 1)
 
         for attempt in range(attempts):

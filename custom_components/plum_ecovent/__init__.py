@@ -31,6 +31,7 @@ from .const import (
 from .device_info import decode_utf8_registers, format_firmware
 from .modbus_client import ModbusClientManager
 from .coordinator import PlumEcoventCoordinator
+from .registers_loader import async_get_registers_module
 
 # Platforms to set up for this integration
 PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
@@ -63,7 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = refreshed_data
         config = {**entry_data, **entry_options}
 
-    from . import registers
+    registers = await async_get_registers_module(hass)
     discovered_definitions = await _async_discover_definitions(manager, registers, config)
     discovered_entities = {
         platform_name: [registers.entity_definition_id(platform_name, definition) for definition in definitions]

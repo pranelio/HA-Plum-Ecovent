@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Register map loading now uses a single packaged in-integration YAML file, preventing setup failures when `/config/docs/plum_modbus_register_map.yaml` is not present.
 - Options flow now shows explicit feedback when no entity override candidates are available and rejects stale/unavailable override selections.
+- Register metadata module import is now loaded through an async-safe executor path in config/setup flows, avoiding blocking file-open warnings on the Home Assistant event loop.
 
 ## [0.5.0-b2] - 2026-03-07
 ### Changed

@@ -461,7 +461,10 @@ async def test_probe_capabilities_retry_reclassifies_and_stops(monkeypatch):
             return plan[-1]
 
     monkeypatch.setattr(cf, "ModbusClientManager", FakeManager)
-    monkeypatch.setattr(cf, "_all_defined_addresses", lambda: [10, 11, 12])
+    async def _addresses(_hass):
+        return [10, 11, 12]
+
+    monkeypatch.setattr(cf, "_async_all_defined_addresses", _addresses)
 
     result = await cf._async_probe_register_capabilities(None, {}, max_attempts=3, deadline_seconds=5.0)
 
@@ -499,7 +502,10 @@ async def test_probe_capabilities_respects_deadline(monkeypatch):
             return None
 
     monkeypatch.setattr(cf, "ModbusClientManager", FakeManager)
-    monkeypatch.setattr(cf, "_all_defined_addresses", lambda: [100, 101, 102, 103, 104])
+    async def _addresses(_hass):
+        return [100, 101, 102, 103, 104]
+
+    monkeypatch.setattr(cf, "_async_all_defined_addresses", _addresses)
 
     result = await cf._async_probe_register_capabilities(None, {}, max_attempts=3, deadline_seconds=0.05)
 
