@@ -385,11 +385,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(step_id="connection", data_schema=self._connection_schema(current))
 
     async def async_step_entities(self, user_input=None):
+        force_enable_choices, force_disable_choices = self._entity_override_choices()
+
         if user_input is not None:
             errors: dict[str, str] = {}
 
             forced = set(user_input.get(CONF_OPTIONAL_FORCE_ENABLE, []))
             disabled = set(user_input.get(CONF_OPTIONAL_DISABLE, []))
+
+            if not forced.issubset(set(force_enable_choices)) or not disabled.issubset(set(force_disable_choices)):
+                errors["base"] = "entity_override_unavailable"
             if forced & disabled:
                 errors["base"] = "overlapping_optional_overrides"
 
@@ -400,7 +405,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     errors=errors,
                 )
 
-            choices = self._entity_choices()
+            choices = set(force_enable_choices) | set(force_disable_choices)
             unknown_forced = [
                 value
                 for value in self._entry.options.get(CONF_OPTIONAL_FORCE_ENABLE, [])
@@ -426,6 +431,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.debug("Unable to refresh coordinator before showing entity options", exc_info=True)
 
         current = self._current()
+        if not force_enable_choices and not force_disable_choices:
+            return self.async_show_form(
+                step_id="entities",
+                data_schema=self._entities_schema(current),
+                errors={"base": "no_entity_override_candidates"},
+            )
         return self.async_show_form(step_id="entities", data_schema=self._entities_schema(current))
 
     async def async_step_device_settings(self, user_input=None):
@@ -536,18 +547,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 if entity_id in discovered_ids
             }
 
-        current = self._current()
-        preserved_overrides = set(current.get(CONF_OPTIONAL_FORCE_ENABLE, []) or []) | set(
-            current.get(CONF_OPTIONAL_DISABLE, []) or []
-        )
-        for entity_id in sorted(preserved_overrides):
-            if entity_id in filtered_catalog:
-                continue
-            if self._is_options_managed_entity(entity_id, managed_setting_addresses):
-                continue
-            fallback_label = base_catalog.get(entity_id, entity_id)
-            filtered_catalog[entity_id] = f"{fallback_label} [current: unavailable]"
-
         runtime_data = self._runtime_data()
         coordinator = runtime_data.get("coordinator") if isinstance(runtime_data, dict) else None
         values = getattr(coordinator, "data", {}) if coordinator is not None else {}
@@ -563,6 +562,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 enriched[entity_id] = f"{label} [current: {current_value}]"
         return enriched
+
+    def _entity_override_choices(self) -> tuple[dict[str, str], dict[str, str]]:
+        choices = self._entity_choices()
+        current = self._current()
+        disabled = set(current.get(CONF_OPTIONAL_DISABLE, []) or [])
+
+        force_enable_choices = {
+            entity_id: label for entity_id, label in choices.items() if entity_id in disabled
+        }
+        force_disable_choices = {
+            entity_id: label for entity_id, label in choices.items() if entity_id not in disabled
+        }
+        return force_enable_choices, force_disable_choices
 
     def _discovered_entity_ids(self) -> set[str] | None:
         runtime_data = self._runtime_data()
@@ -590,6 +602,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 if address is not None and address in available_addresses:
                     discovered.add(entity_id)
             return discovered
+
+        preserved_overrides = set(current.get(CONF_OPTIONAL_FORCE_ENABLE, []) or []) | set(
+            current.get(CONF_OPTIONAL_DISABLE, []) or []
+        )
+        if preserved_overrides:
+            catalog = self._raw_entity_catalog()
+            return {entity_id for entity_id in preserved_overrides if entity_id in catalog}
         return None
 
     def _raw_entity_catalog(self) -> dict[str, str]:
@@ -691,14 +710,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return None
 
     def _entities_schema(self, current: dict):
-        choices = self._entity_choices()
-        default_forced = [value for value in current.get(CONF_OPTIONAL_FORCE_ENABLE, []) if value in choices]
-        default_disabled = [value for value in current.get(CONF_OPTIONAL_DISABLE, []) if value in choices]
+        force_enable_choices, force_disable_choices = self._entity_override_choices()
+        default_forced = [
+            value for value in current.get(CONF_OPTIONAL_FORCE_ENABLE, []) if value in force_enable_choices
+        ]
+        default_disabled = [
+            value for value in current.get(CONF_OPTIONAL_DISABLE, []) if value in force_disable_choices
+        ]
 
         return vol.Schema(
             {
-                vol.Optional(CONF_OPTIONAL_FORCE_ENABLE, default=default_forced): cv.multi_select(choices),
-                vol.Optional(CONF_OPTIONAL_DISABLE, default=default_disabled): cv.multi_select(choices),
+                vol.Optional(CONF_OPTIONAL_FORCE_ENABLE, default=default_forced): cv.multi_select(force_enable_choices),
+                vol.Optional(CONF_OPTIONAL_DISABLE, default=default_disabled): cv.multi_select(force_disable_choices),
             }
         )
 

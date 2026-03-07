@@ -406,12 +406,12 @@ async def test_options_flow_branching_entities(monkeypatch):
 
     valid = await flow.async_step_entities(
         {
-            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:82:co2"],
-            CONF_OPTIONAL_DISABLE: [],
+            CONF_OPTIONAL_FORCE_ENABLE: [],
+            CONF_OPTIONAL_DISABLE: ["sensor:82:co2"],
         }
     )
     assert valid["type"] == "create_entry"
-    assert valid["data"][CONF_OPTIONAL_FORCE_ENABLE] == ["sensor:82:co2"]
+    assert valid["data"][CONF_OPTIONAL_DISABLE] == ["sensor:82:co2"]
 
 
 @pytest.mark.asyncio
@@ -511,7 +511,7 @@ async def test_probe_capabilities_respects_deadline(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_options_flow_entity_choices_respect_discovery_and_preserve_overrides(monkeypatch):
-    """Entity choices should honor discovered availability and keep legacy override ids visible."""
+    """Entity choices should honor discovered availability and hide legacy unavailable override ids."""
     from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
     from types import SimpleNamespace
     import custom_components.plum_ecovent.config_flow as cf
@@ -543,7 +543,7 @@ async def test_options_flow_entity_choices_respect_discovery_and_preserve_overri
     assert "sensor:82:co2" in choices
     assert "sensor:202:outdoor_temperature" in choices
     assert "number:70:supply_fan_speed_g1" not in choices
-    assert "sensor:999:legacy_sensor" in choices
+    assert "sensor:999:legacy_sensor" not in choices
 
 
 @pytest.mark.asyncio
@@ -572,3 +572,48 @@ async def test_options_flow_entities_preserve_options_managed_overrides_hidden(m
     )
     assert result["type"] == "create_entry"
     assert "number:70:supply_fan_speed_g1" in result["data"][CONF_OPTIONAL_FORCE_ENABLE]
+
+
+@pytest.mark.asyncio
+async def test_options_flow_entities_split_enable_disable_choices(monkeypatch):
+    """Force-enable should include disabled interactable entities only; disable should include enabled ones."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(
+        data={CONF_AVAILABLE_REGISTERS: [82]},
+        options={
+            CONF_OPTIONAL_FORCE_ENABLE: [],
+            CONF_OPTIONAL_DISABLE: ["sensor:82:co2"],
+        },
+    )
+    flow = OptionsFlowHandler(entry)
+
+    force_enable_choices, force_disable_choices = flow._entity_override_choices()
+
+    assert "sensor:82:co2" in force_enable_choices
+    assert "sensor:82:co2" not in force_disable_choices
+
+
+@pytest.mark.asyncio
+async def test_options_flow_entities_no_candidates_shows_message(monkeypatch):
+    """When no interactable entities are left, entities step should inform the user."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(
+        data={},
+        options={
+            CONF_OPTIONAL_FORCE_ENABLE: [],
+            CONF_OPTIONAL_DISABLE: [],
+        },
+    )
+    flow = OptionsFlowHandler(entry)
+
+    monkeypatch.setattr(flow, "_entity_choices", lambda: {})
+
+    result = await flow.async_step_entities()
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "entities"
+    assert result["errors"]["base"] == "no_entity_override_candidates"

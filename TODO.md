@@ -74,6 +74,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 	- [x] Do not request device name in config flow (use Home Assistant naming conventions).
 - [x] Add feature discovery by reading optional registers and adapting entities.
 - [x] Add feature enable/disable controls in the options flow after setup.
+- [x] Constrain options-flow override lists to interactable entities only (responding/discovered), with split force-enable/force-disable choices and empty-list user feedback.
 - [x] Expand register discovery classification and retries:
 	- [x] Build `available`, `non_responding`, and `unsupported` register lists during probe.
 	- [x] Classify Modbus exception responses (illegal function/address/value/refused) as `unsupported`.

@@ -66,7 +66,9 @@
       "invalid_unit": "Modbus Address must be between 1 and 247",
       "invalid_update_rate": "Update rate must be between 1 and 3600 seconds",
       "invalid_device_setting": "One or more values are outside allowed ranges",
-      "overlapping_optional_overrides": "An optional entity cannot be both force-enabled and disabled"
+      "overlapping_optional_overrides": "An optional entity cannot be both force-enabled and disabled",
+      "entity_override_unavailable": "One or more selected entities are no longer available for override",
+      "no_entity_override_candidates": "No entity override actions are available with the current discovered/configured entity set"
     },
     "step": {
       "init": {

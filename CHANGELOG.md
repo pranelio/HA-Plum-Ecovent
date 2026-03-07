@@ -5,9 +5,12 @@ All notable changes to this project are documented in this file.
 ## [0.5.0-b3] - 2026-03-07
 ### Changed
 - Updated release metadata to `0.5.0-b3` in `manifest.json` and `const.py`.
+- Options flow entity override selection now enforces interactable entities only, using discovered/responding registers (or currently configured override entities when discovery snapshot is unavailable).
+- Options flow now splits override actions by current state: force-enable shows only currently disabled entities; force-disable shows only currently enabled entities.
 
 ### Fixed
 - Register map loading now uses a single packaged in-integration YAML file, preventing setup failures when `/config/docs/plum_modbus_register_map.yaml` is not present.
+- Options flow now shows explicit feedback when no entity override candidates are available and rejects stale/unavailable override selections.
 
 ## [0.5.0-b2] - 2026-03-07
 ### Changed
