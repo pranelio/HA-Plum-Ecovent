@@ -44,12 +44,23 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Document any Platinum rule exemptions (for non-HTTP integrations, e.g., websession injection not applicable).
 
 ## Feature roadmap
-- [ ] Implement registers for alarms.
-- [ ] Implement alarm notifications.
+- [ ] Implement alarm register support (state/fault registers, severity mapping, and entity exposure).
+- [ ] Implement notification support for alarms (persistent notifications/events and automation-friendly metadata).
+- [ ] Add Home Assistant trigger support for alarms.
 - [x] Add feature discovery by reading optional registers and adapting entities.
 - [x] Add feature enable/disable controls in the options flow after setup.
+- [ ] Add calculated sensor support (e.g., efficiency and other derived metrics where data quality allows).
+- [ ] Improve Modbus communication:
+	- [ ] Dynamic polling strategy based on enabled entities and feature usage.
+	- [ ] Batch/multi-register reads where possible to reduce call count and bus overhead.
+- [ ] Add Modbus RTU support (USB-to-RS485/Modbus RTU adapters), including automatic connection parameter detection where feasible.
+- [ ] Add `climate` entity support for temperature control where the device exposes writable setpoint/control registers.
+- [ ] Add `fan` entity support for fan levels/speeds where supported by the device model.
 - [ ] Implement remaining registers from the manufacturer list.
-- [ ] Add additional platforms (`select`, `text`, `button`, etc.) if needed.
+- [ ] Add additional platforms (`select`, `text`, `button`, etc.) where they map cleanly to device capabilities.
+- [ ] Expand documentation with clearer hardware and software setup instructions (wiring, bus setup, HA config, troubleshooting).
+- [ ] Add ESPHome device support with fallback behavior for lost communication with Home Assistant.
+- [ ] Provide an ESPHome configuration mechanism/template to generate usable baseline configs, including fallback settings.
 
 ## Completed
 - [x] Introduce a `DataUpdateCoordinator` to centralize polling and connection management.

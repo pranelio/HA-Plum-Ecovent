@@ -37,4 +37,4 @@ CONF_DEVICE_INFO_PENDING_FETCH = "device_info_pending_fetch"
 CONF_DEVICE_INFO_FETCH_ATTEMPTED = "device_info_fetch_attempted"
 
 # Integration version (keep in sync with manifest.json)
-__version__ = "0.4.3"
+__version__ = "0.5.0-b1"
