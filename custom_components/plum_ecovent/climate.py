@@ -7,7 +7,6 @@ from typing import Any
 try:
     from homeassistant.components.climate import ClimateEntity
     from homeassistant.components.climate.const import (
-        ATTR_TEMPERATURE,
         ClimateEntityFeature,
         FAN_HIGH,
         FAN_LOW,
@@ -17,11 +16,15 @@ try:
         PRESET_BOOST,
         PRESET_NONE,
     )
+    try:
+        from homeassistant.components.climate.const import ATTR_TEMPERATURE
+    except ImportError:
+        from homeassistant.const import ATTR_TEMPERATURE
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.const import UnitOfTemperature
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
-except Exception:  # Running outside Home Assistant for tests
+except ImportError:  # Running outside Home Assistant for tests
     class ClimateEntity:  # type: ignore
         pass
 
