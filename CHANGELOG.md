@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 2026-03-07
+### Added
+- Added a capability-aware `climate` entity with HVAC mode (`AUTO`, `FAN_ONLY`), fan mode (`off`, `low`, `medium`, `high`), boost preset, and target humidity support.
+- Added a Home Assistant `notify` entity for issue alarms with persistent notifications and automatic clear on recovery.
+- Added protocol-first setup validation and register capability classification with persisted buckets for available, non-responding, and unsupported registers.
+
+### Changed
+- Promoted the `0.5.0` beta stream (`b1` through `b4`) to final release.
+- Climate control now writes day/night comfort setpoints together and automatically powers on the ERV before enabling `AUTO` or `Boost` when needed.
+- Removed standalone `Auto Mode` and `Boost` switch entities in favor of climate-native controls.
+- Notification routing is now explicit through YAML metadata (`notification: true`), with notification-routed alarms excluded from normal device-page entities.
+- Register map loading now uses a single packaged canonical YAML source.
+- Options flow now constrains override actions to valid interactable entities and improves unavailable-selection handling.
+- Setup and runtime diagnostics were refined with clearer progress states, bounded discovery timing, and less noisy partial-failure logging.
+
+### Fixed
+- Fixed climate platform setup crash by initializing the climate base entity (`entity_id` now available during add-entity flow).
+- Fixed async safety issue in register metadata loading by avoiding event-loop blocking file import paths.
+- Fixed setup robustness for partial/unsupported Modbus maps by separating unsupported vs non-responding responses and tightening timeout/retry behavior.
+- Fixed modbus communication stability for noisy bridges with stricter response validation and retry/reconnect handling.
+
 ## [0.5.0-b4] - 2026-03-07
 ### Added
 - Added a `climate` entity with read/write support for fan stages (`stage_1`, `stage_2`, `stage_3`) and target humidity.
