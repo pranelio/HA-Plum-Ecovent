@@ -71,7 +71,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Add `fan` entity support for fan levels/speeds where supported by the device model.
 - [ ] Implement remaining registers from the manufacturer list.
 - [ ] Add additional platforms (`select`, `text`, `button`, etc.) where they map cleanly to device capabilities.
-- [ ] Expand documentation with clearer hardware and software setup instructions (wiring, bus setup, HA config, troubleshooting).
+- [x] Expand documentation with clearer hardware and software setup instructions (wiring, bus setup, HA config, troubleshooting).
 - [ ] Add ESPHome device support with fallback behavior for lost communication with Home Assistant.
 - [ ] Provide an ESPHome configuration mechanism/template to generate usable baseline configs, including fallback settings.
 
@@ -83,5 +83,8 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [x] Provide a migration/cleanup guide for updated `unique_id` formats.
 - [x] Add options flow control to adjust `update_rate` post-setup.
 - [x] Maintain a `__version__` constant, release tags, and changelog.
+- [x] Use `docs/plum_modbus_register_map.yaml` as canonical runtime source and remove duplicate register-map markdown source.
+- [x] Align runtime entity names in YAML with HVAC naming conventions and fix Extract/Exhaust label mapping.
+- [x] Add regression tests/docs for canonical English naming baseline with translation-aware guidance.
 
 See `README.md` for usage notes.
