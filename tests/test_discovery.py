@@ -112,3 +112,27 @@ async def test_discovery_legacy_fallback_probes_when_snapshot_missing():
 
     assert reachable.issubset(selected_addresses)
     assert manager.calls, "Expected probe calls when responding snapshot is absent"
+
+
+@pytest.mark.asyncio
+async def test_discovery_empty_snapshot_skips_fallback_probing():
+    """When available snapshot is explicitly empty, discovery should not probe or create entities."""
+    from custom_components.plum_ecovent import registers
+    from custom_components.plum_ecovent.const import CONF_AVAILABLE_REGISTERS
+
+    manager = DummyManager(reachable_addresses={201, 202, 59})
+    discovered = await _async_discover_definitions(
+        cast(Any, manager),
+        registers,
+        {CONF_AVAILABLE_REGISTERS: []},
+    )
+
+    all_selected = [
+        *discovered["sensor"],
+        *discovered["binary_sensor"],
+        *discovered["switch"],
+        *discovered["number"],
+    ]
+
+    assert all_selected == []
+    assert manager.calls == []

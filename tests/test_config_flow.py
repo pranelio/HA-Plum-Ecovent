@@ -9,15 +9,20 @@ import pytest
 
 from custom_components.plum_ecovent.config_flow import ConfigFlow
 from custom_components.plum_ecovent.const import (
+    CONF_AVAILABLE_REGISTERS,
+    CONF_CONNECTION_TYPE,
     CONF_HOST,
+    CONF_NON_RESPONDING_REGISTERS,
     CONF_PORT,
+    CONF_UNSUPPORTED_REGISTERS,
     CONF_UNIT,
     CONF_UPDATE_RATE,
     CONF_OPTIONAL_FORCE_ENABLE,
     CONF_OPTIONAL_DISABLE,
     CONF_RESPONDING_REGISTERS,
+    CONNECTION_TYPE_RTU,
+    CONNECTION_TYPE_TCP,
 )
-from homeassistant.const import CONF_NAME
 
 
 async def _step_until_not_progress(step_coro_factory, max_attempts=10):
@@ -40,64 +45,76 @@ async def test_tcp_flow(monkeypatch):
     flow = ConfigFlow()
     import custom_components.plum_ecovent.config_flow as cf
 
-    async def _ok_connection(host, port, timeout=5.0):
+    async def _ok_connection(_hass, _config, retries=2, backoff=0.2):
         return None
 
     async def _identity(_hass, _config):
         return {}
 
-    async def _probe(_hass, _config, retries=2):
-        return [201, 202]
+    async def _probe(_hass, _config, max_attempts=3, deadline_seconds=45.0):
+        return {
+            "available": [201, 202],
+            "non_responding": [203],
+            "unsupported": [204],
+        }
 
-    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
+    monkeypatch.setattr(cf, "_async_validate_modbus_connection", _ok_connection)
     monkeypatch.setattr(cf, "_async_fetch_device_identity", _identity)
-    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe)
+    monkeypatch.setattr(cf, "_async_probe_register_capabilities", _probe)
     # patch out hass-dependent helpers since we don't run under HA
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
+
     flow.async_set_unique_id = _dummy_set_unique_id
     flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
 
-    result = await flow.async_step_user()
-    assert result["type"] == "form"
+    protocol_input = {CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP}
+    result2 = await flow.async_step_user(protocol_input)
+    assert result2["type"] == "form"
+    assert result2["step_id"] == "tcp"
 
-    user_input = {
+    tcp_input = {
         CONF_HOST: "1.2.3.4",
         CONF_PORT: 502,
         CONF_UNIT: 17,
-        CONF_UPDATE_RATE: 30,
-        CONF_NAME: "My",
     }
-    result2 = await flow.async_step_user(user_input)
-    assert result2["type"] == "progress"
+    result3 = await flow.async_step_tcp(tcp_input)
+    assert result3["type"] == "progress"
 
-    result3 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
-    assert result3["type"] == "progress_done"
-
-    result4 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    result4 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
     assert result4["type"] == "progress_done"
 
-    result5 = await flow.async_step_probe_registers_result()
-    assert result5["type"] == "create_entry"
-    assert result5["title"] == "My"
-    assert result5["data"][CONF_HOST] == "1.2.3.4"
-    assert result5["data"][CONF_PORT] == 502
-    assert result5["data"][CONF_UNIT] == 17
-    assert result5["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
+    result5 = await _step_until_not_progress(lambda: flow.async_step_probe_registers())
+    assert result5["type"] == "progress_done"
+
+    result6 = await flow.async_step_probe_registers_result()
+    assert result6["type"] == "create_entry"
+    assert result6["title"] == "Plum Ecovent"
+    assert result6["data"][CONF_HOST] == "1.2.3.4"
+    assert result6["data"][CONF_PORT] == 502
+    assert result6["data"][CONF_UNIT] == 17
+    assert result6["data"][CONF_AVAILABLE_REGISTERS] == [201, 202]
+    assert result6["data"][CONF_NON_RESPONDING_REGISTERS] == [203]
+    assert result6["data"][CONF_UNSUPPORTED_REGISTERS] == [204]
+    assert result6["data"][CONF_RESPONDING_REGISTERS] == [201, 202]
+
+    result7 = await flow.async_step_user({CONF_CONNECTION_TYPE: CONNECTION_TYPE_RTU})
+    assert result7["type"] == "form"
+    assert result7["errors"]["base"] == "rtu_not_supported"
 
     # invalid port should return form with error
-    result6 = await flow.async_step_user(
-        {CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1, CONF_UPDATE_RATE: 30}
+    result8 = await flow.async_step_tcp(
+        {CONF_HOST: "1.2.3.4", CONF_PORT: 70000, CONF_UNIT: 1}
     )
-    assert result6["type"] == "form"
-    assert result6["errors"][CONF_PORT] == "invalid_port"
+    assert result8["type"] == "form"
+    assert result8["errors"][CONF_PORT] == "invalid_port"
 
     # invalid unit should return form with error
-    result7 = await flow.async_step_user(
-        {CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0, CONF_UPDATE_RATE: 30}
+    result9 = await flow.async_step_tcp(
+        {CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 0}
     )
-    assert result7["type"] == "form"
-    assert result7["errors"][CONF_UNIT] == "invalid_unit"
+    assert result9["type"] == "form"
+    assert result9["errors"][CONF_UNIT] == "invalid_unit"
 
 
 @pytest.mark.asyncio
@@ -106,25 +123,18 @@ async def test_tcp_flow_verify_adapter_connection_error(monkeypatch):
     flow = ConfigFlow()
     import custom_components.plum_ecovent.config_flow as cf
 
-    async def _refused_connection(host, port, timeout=5.0):
+    async def _refused_connection(_hass, _config, retries=2, backoff=0.2):
         return "connection_refused"
 
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(cf, "_async_test_connection", _refused_connection)
+    monkeypatch.setattr(cf, "_async_validate_modbus_connection", _refused_connection)
     flow.async_set_unique_id = _dummy_set_unique_id
     flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
 
-    result = await flow.async_step_user(
-        {
-            CONF_HOST: "1.2.3.4",
-            CONF_PORT: 502,
-            CONF_UNIT: 1,
-            CONF_UPDATE_RATE: 30,
-            CONF_NAME: "My",
-        }
-    )
+    await flow.async_step_user({CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP})
+    result = await flow.async_step_tcp({CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 1})
     assert result["type"] == "progress"
 
     result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
@@ -143,25 +153,18 @@ async def test_tcp_flow_verify_adapter_other_connection_errors(monkeypatch, erro
     flow = ConfigFlow()
     import custom_components.plum_ecovent.config_flow as cf
 
-    async def _failing_connection(host, port, timeout=5.0):
+    async def _failing_connection(_hass, _config, retries=2, backoff=0.2):
         return error_code
 
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(cf, "_async_test_connection", _failing_connection)
+    monkeypatch.setattr(cf, "_async_validate_modbus_connection", _failing_connection)
     flow.async_set_unique_id = _dummy_set_unique_id
     flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
 
-    result = await flow.async_step_user(
-        {
-            CONF_HOST: "1.2.3.4",
-            CONF_PORT: 502,
-            CONF_UNIT: 1,
-            CONF_UPDATE_RATE: 30,
-            CONF_NAME: "My",
-        }
-    )
+    await flow.async_step_user({CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP})
+    result = await flow.async_step_tcp({CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 1})
     assert result["type"] == "progress"
 
     result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
@@ -179,29 +182,22 @@ async def test_tcp_flow_probe_failed(monkeypatch):
     flow = ConfigFlow()
     import custom_components.plum_ecovent.config_flow as cf
 
-    async def _ok_connection(host, port, timeout=5.0):
+    async def _ok_connection(_hass, _config, retries=2, backoff=0.2):
         return None
 
-    async def _probe_none(_hass, _config, retries=2):
-        return []
+    async def _probe_none(_hass, _config, max_attempts=3, deadline_seconds=45.0):
+        return {"available": [], "non_responding": [201], "unsupported": []}
 
     async def _dummy_set_unique_id(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(cf, "_async_test_connection", _ok_connection)
-    monkeypatch.setattr(cf, "_async_probe_responding_registers", _probe_none)
+    monkeypatch.setattr(cf, "_async_validate_modbus_connection", _ok_connection)
+    monkeypatch.setattr(cf, "_async_probe_register_capabilities", _probe_none)
     flow.async_set_unique_id = _dummy_set_unique_id
     flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
 
-    result = await flow.async_step_user(
-        {
-            CONF_HOST: "1.2.3.4",
-            CONF_PORT: 502,
-            CONF_UNIT: 1,
-            CONF_UPDATE_RATE: 30,
-            CONF_NAME: "My",
-        }
-    )
+    await flow.async_step_user({CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP})
+    result = await flow.async_step_tcp({CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 1})
     assert result["type"] == "progress"
 
     result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
@@ -214,6 +210,35 @@ async def test_tcp_flow_probe_failed(monkeypatch):
     assert result4["type"] == "form"
     assert result4["step_id"] == "probe_registers"
     assert result4["errors"]["base"] == "probe_failed"
+
+
+@pytest.mark.asyncio
+async def test_tcp_flow_verify_adapter_unit_no_response(monkeypatch):
+    """Flow should surface unit_no_response when TCP is reachable but Modbus doesn't reply."""
+    flow = ConfigFlow()
+    import custom_components.plum_ecovent.config_flow as cf
+
+    async def _unit_no_response(_hass, _config, retries=2, backoff=0.2):
+        return "unit_no_response"
+
+    async def _dummy_set_unique_id(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(cf, "_async_validate_modbus_connection", _unit_no_response)
+    flow.async_set_unique_id = _dummy_set_unique_id
+    flow._abort_if_unique_id_configured = lambda *args, **kwargs: None
+
+    await flow.async_step_user({CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP})
+    result = await flow.async_step_tcp({CONF_HOST: "1.2.3.4", CONF_PORT: 502, CONF_UNIT: 1})
+    assert result["type"] == "progress"
+
+    result2 = await _step_until_not_progress(lambda: flow.async_step_verify_adapter())
+    assert result2["type"] == "progress_done"
+
+    result3 = await flow.async_step_verify_adapter_result()
+    assert result3["type"] == "form"
+    assert result3["step_id"] == "verify_adapter"
+    assert result3["errors"]["base"] == "unit_no_response"
 
 
 # additional helper test for setup_entry device registration
@@ -307,7 +332,6 @@ async def test_options_flow_branching_connection(monkeypatch):
             CONF_PORT: 502,
             CONF_UNIT: 1,
             CONF_UPDATE_RATE: 30,
-            CONF_NAME: "Plum",
         },
         options={},
     )
@@ -327,7 +351,6 @@ async def test_options_flow_branching_connection(monkeypatch):
             CONF_PORT: 70000,
             CONF_UNIT: 1,
             CONF_UPDATE_RATE: 30,
-            CONF_NAME: "Plum",
         }
     )
     assert invalid["type"] == "form"
@@ -339,13 +362,11 @@ async def test_options_flow_branching_connection(monkeypatch):
             CONF_PORT: 502,
             CONF_UNIT: 7,
             CONF_UPDATE_RATE: 20,
-            CONF_NAME: "New Name",
         }
     )
     assert valid["type"] == "create_entry"
     assert valid["data"][CONF_HOST] == "10.0.0.2"
     assert valid["data"][CONF_UNIT] == 7
-    assert valid["data"][CONF_NAME] == "New Name"
 
 
 @pytest.mark.asyncio
@@ -363,7 +384,6 @@ async def test_options_flow_branching_entities(monkeypatch):
             CONF_PORT: 502,
             CONF_UNIT: 1,
             CONF_UPDATE_RATE: 30,
-            CONF_NAME: "Plum",
         },
         options={},
     )
@@ -390,3 +410,163 @@ async def test_options_flow_branching_entities(monkeypatch):
     )
     assert valid["type"] == "create_entry"
     assert valid["data"][CONF_OPTIONAL_FORCE_ENABLE] == ["sensor:82:co2"]
+
+
+@pytest.mark.asyncio
+async def test_probe_capabilities_retry_reclassifies_and_stops(monkeypatch):
+    """Probe should reclassify across retries and stop at configured max attempts."""
+    import custom_components.plum_ecovent.config_flow as cf
+
+    class SuccessResponse:
+        registers = [1]
+
+        @staticmethod
+        def isError():
+            return False
+
+    class IllegalAddressResponse:
+        exception_code = 2
+
+        @staticmethod
+        def isError():
+            return True
+
+    calls: dict[int, int] = {}
+    scripted = {
+        10: [None, SuccessResponse()],
+        11: [IllegalAddressResponse()],
+        12: [None, None, None],
+    }
+
+    class FakeManager:
+        def __init__(self, hass, config):
+            self.retries = 0
+            self.backoff = 0.0
+            self.timeout = 0.1
+
+        async def async_connect(self):
+            return True
+
+        async def async_close(self):
+            return None
+
+        async def read_holding_registers(self, address, count, return_error_response=False):
+            index = calls.get(int(address), 0)
+            calls[int(address)] = index + 1
+            plan = scripted[int(address)]
+            if index < len(plan):
+                return plan[index]
+            return plan[-1]
+
+    monkeypatch.setattr(cf, "ModbusClientManager", FakeManager)
+    monkeypatch.setattr(cf, "_all_defined_addresses", lambda: [10, 11, 12])
+
+    result = await cf._async_probe_register_capabilities(None, {}, max_attempts=3, deadline_seconds=5.0)
+
+    assert result["available"] == [10]
+    assert result["unsupported"] == [11]
+    assert result["non_responding"] == [12]
+    assert calls[10] == 2
+    assert calls[11] == 1
+    assert calls[12] == 3
+
+
+@pytest.mark.asyncio
+async def test_probe_capabilities_respects_deadline(monkeypatch):
+    """Probe should stop early on global deadline to avoid startup hangs."""
+    import custom_components.plum_ecovent.config_flow as cf
+
+    calls = 0
+
+    class FakeManager:
+        def __init__(self, hass, config):
+            self.retries = 0
+            self.backoff = 0.0
+            self.timeout = 0.1
+
+        async def async_connect(self):
+            return True
+
+        async def async_close(self):
+            return None
+
+        async def read_holding_registers(self, address, count, return_error_response=False):
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0.03)
+            return None
+
+    monkeypatch.setattr(cf, "ModbusClientManager", FakeManager)
+    monkeypatch.setattr(cf, "_all_defined_addresses", lambda: [100, 101, 102, 103, 104])
+
+    result = await cf._async_probe_register_capabilities(None, {}, max_attempts=3, deadline_seconds=0.05)
+
+    assert result["available"] == []
+    assert result["unsupported"] == []
+    assert result["non_responding"]
+    assert calls < (3 * 5)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_entity_choices_respect_discovery_and_preserve_overrides(monkeypatch):
+    """Entity choices should honor discovered availability and keep legacy override ids visible."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+    import custom_components.plum_ecovent.config_flow as cf
+
+    monkeypatch.setattr(
+        cf,
+        "entity_catalog",
+        lambda: {
+            "sensor:82:co2": "sensor · CO2 (82)",
+            "sensor:202:outdoor_temperature": "sensor · Outdoor Air Temperature (202)",
+            "number:70:supply_fan_speed_g1": "number · Supply Fan Speed Stage 1 (70)",
+        },
+        raising=False,
+    )
+
+    entry = SimpleNamespace(
+        data={
+            CONF_AVAILABLE_REGISTERS: [82, 202, 70],
+        },
+        options={
+            CONF_OPTIONAL_FORCE_ENABLE: ["sensor:999:legacy_sensor"],
+            CONF_OPTIONAL_DISABLE: [],
+        },
+    )
+    flow = OptionsFlowHandler(entry)
+
+    choices = flow._entity_choices()
+
+    assert "sensor:82:co2" in choices
+    assert "sensor:202:outdoor_temperature" in choices
+    assert "number:70:supply_fan_speed_g1" not in choices
+    assert "sensor:999:legacy_sensor" in choices
+
+
+@pytest.mark.asyncio
+async def test_options_flow_entities_preserve_options_managed_overrides_hidden(monkeypatch):
+    """Options-managed number ids stay preserved but hidden from selection choices."""
+    from custom_components.plum_ecovent.config_flow import OptionsFlowHandler
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(
+        data={CONF_AVAILABLE_REGISTERS: [70]},
+        options={
+            CONF_OPTIONAL_FORCE_ENABLE: ["number:70:supply_fan_speed_g1"],
+            CONF_OPTIONAL_DISABLE: [],
+        },
+    )
+    flow = OptionsFlowHandler(entry)
+
+    choices = flow._entity_choices()
+    assert "number:70:supply_fan_speed_g1" not in choices
+
+    result = await flow.async_step_entities(
+        {
+            CONF_OPTIONAL_FORCE_ENABLE: [],
+            CONF_OPTIONAL_DISABLE: [],
+        }
+    )
+    assert result["type"] == "create_entry"
+    assert "number:70:supply_fan_speed_g1" in result["data"][CONF_OPTIONAL_FORCE_ENABLE]
