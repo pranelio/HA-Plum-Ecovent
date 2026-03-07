@@ -30,11 +30,13 @@ The structure is vendor-first, and can be expanded with model-specific pages lat
 3. Configure gateway serial settings to match the unit bus settings.
 4. Confirm network/IP assignment of the gateway.
 5. Test TCP connectivity from Home Assistant host to gateway IP/port.
-6. Add the integration and configure host/port/unit/update rate.
+6. Add the integration, choose `Modbus TCP`, and configure host/port/unit.
 7. Verify live sensors first, then controls.
+8. Adjust `update_rate` and optional entities in options flow after setup.
 
 ## Notes
 
 - Vendor app/cloud connectivity does not guarantee local Modbus TCP availability.
 - For this integration path, treat RTU-to-TCP gateway usage as the default/expected setup.
 - Exact wiring/commissioning details can vary by installer profile and firmware.
+- `Modbus RTU` appears in setup flow for roadmap visibility, but is not yet available in this release.

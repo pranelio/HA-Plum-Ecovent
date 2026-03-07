@@ -9,7 +9,8 @@ This document describes the Modbus behavior captured in the vendor file **“Use
   - `0x03` Read Holding Registers
   - `0x06` Write Single Register
   - `0x10` Write Multiple Registers
-- The Home Assistant integration in this repository currently uses Modbus TCP transport semantics, but register logic and function behavior map directly to the same register model.
+- The Home Assistant integration in this repository currently operates with Modbus TCP endpoint setup (commonly via RTU-to-TCP gateways). Register logic and function behavior map directly to the same register model.
+- A visible Modbus RTU setup path exists in UX for roadmap transparency, but RTU runtime transport is not yet enabled in this release.
 
 ## 2) Transport and serial parameters
 

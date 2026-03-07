@@ -98,6 +98,8 @@ class PlumEcoventNumber(CoordinatorEntity, NumberEntity):
                 self._attr_entity_category = EntityCategory(definition.entity_category)
             except Exception:
                 self._attr_entity_category = None
+        if getattr(definition, "icon", None):
+            self._attr_icon = definition.icon
         if definition.step is not None:
             self._attr_native_step = definition.step
         if definition.min_value is not None:

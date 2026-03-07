@@ -27,7 +27,7 @@ Current estimate: **Bronze reached (self-assessed)**.
 ### Silver milestone (not reached)
 - [ ] Increase measured overall integration coverage to >95% and keep it enforced in CI.
 - [ ] Define `PARALLEL_UPDATES` per platform to control concurrent updates.
-- [ ] Improve availability logging to log once on disconnect and once on recovery (avoid log spam).
+- [x] Improve availability logging to log once on disconnect and once on recovery (avoid log spam).
 - [ ] Verify/document reauth rule exemption (no authentication flow for local Modbus device).
 - [ ] Expand docs with explicit installation/configuration parameter reference.
 
@@ -46,22 +46,22 @@ Current estimate: **Bronze reached (self-assessed)**.
 - [ ] Document any Platinum rule exemptions (for non-HTTP integrations, e.g., websession injection not applicable).
 
 ## Feature roadmap
-- [ ] Refactor config flow for protocol-first setup:
-	- [ ] Ask for connection type first (`Modbus TCP` / `Modbus RTU`).
-	- [ ] Keep `Modbus RTU` visible but disabled (not implemented yet).
-	- [ ] For `Modbus TCP`, require only host, port, and unit address.
-	- [ ] Move `update_rate` out of config flow (options flow only).
-	- [ ] Do not request device name in config flow (use Home Assistant naming conventions).
+- [x] Refactor config flow for protocol-first setup:
+	- [x] Ask for connection type first (`Modbus TCP` / `Modbus RTU`).
+	- [x] Keep `Modbus RTU` visible but disabled (not implemented yet).
+	- [x] For `Modbus TCP`, require only host, port, and unit address.
+	- [x] Move `update_rate` out of config flow (options flow only).
+	- [x] Do not request device name in config flow (use Home Assistant naming conventions).
 - [ ] Implement alarm register support (state/fault registers, severity mapping, and entity exposure).
 - [ ] Implement notification support for alarms (persistent notifications/events and automation-friendly metadata).
 - [ ] Add Home Assistant trigger support for alarms.
 - [x] Add feature discovery by reading optional registers and adapting entities.
 - [x] Add feature enable/disable controls in the options flow after setup.
-- [ ] Expand register discovery classification and retries:
-	- [ ] Build `available`, `non_responding`, and `unsupported` register lists during probe.
-	- [ ] Classify Modbus exception responses (illegal function/address/value/refused) as `unsupported`.
-	- [ ] Retry only `non_responding` registers with bounded timeout/retry policy (max 3 attempts).
-	- [ ] Create entities only from `available` registers; avoid noisy unavailable entities for other classes.
+- [x] Expand register discovery classification and retries:
+	- [x] Build `available`, `non_responding`, and `unsupported` register lists during probe.
+	- [x] Classify Modbus exception responses (illegal function/address/value/refused) as `unsupported`.
+	- [x] Retry only `non_responding` registers with bounded timeout/retry policy (max 3 attempts).
+	- [x] Create entities only from `available` registers; avoid noisy unavailable entities for other classes.
 - [ ] Add calculated sensor support (e.g., efficiency and other derived metrics where data quality allows).
 - [ ] Improve Modbus communication:
 	- [ ] Dynamic polling strategy based on enabled entities and feature usage.

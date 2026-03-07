@@ -25,7 +25,7 @@ Vendor-level guidance for Ensy units known or expected to expose the same Plum e
 ## Home Assistant setup hints
 
 - Start with default `port=502`, `unit=1`
-- Use a conservative `update_rate` first (e.g. `30` seconds)
+- After setup succeeds, set a conservative `update_rate` in options flow first (e.g. `30` seconds)
 - Validate sensors before enabling write-heavy automations
 
 ## Model-specific pages (future)

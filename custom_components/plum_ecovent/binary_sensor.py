@@ -83,6 +83,8 @@ class PlumEcoventBinarySensor(CoordinatorEntity, BinarySensorEntity):
                 self._attr_entity_category = EntityCategory(definition.entity_category)
             except Exception:
                 self._attr_entity_category = None
+        if getattr(definition, "icon", None):
+            self._attr_icon = definition.icon
 
     @property
     def device_info(self):

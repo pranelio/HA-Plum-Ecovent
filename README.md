@@ -1,15 +1,16 @@
 # Plum Ecovent (Home Assistant custom integration)
 
-Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integration exposes controller registers as standard Home Assistant entities (sensors, binary sensors, switches, numbers) with device registry support, configurable polling interval, and HACS-friendly packaging.
+Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integration uses a protocol-first setup flow, probes register capabilities during onboarding, and exposes supported controller registers as Home Assistant entities.
 
 ## Supported Devices
 - See the live compatibility list first: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
 - Includes tested units and likely-compatible families by vendor
 
 ## Features
-- Modbus TCP client with robust signature fallbacks and connection-safe shutdown
-- Auto-created device and entities for key registers (temps, fans, filters, modes, setpoints)
-- Configurable polling interval (`update_rate`) and unit id
+- Protocol-first setup (`Modbus TCP` active, `Modbus RTU` visible but not yet implemented)
+- Bounded Modbus validation during setup (TCP reachability + Modbus handshake)
+- Register capability classification (`available`, `non_responding`, `unsupported`) for cleaner entity creation
+- Configurable polling interval (`update_rate`) and unit id in options flow
 - Unique IDs and entity categories for full UI management
 
 ## Installation
@@ -24,16 +25,19 @@ Control and monitor Plum Ecovent ventilation units via **Modbus TCP**. The integ
 
 ## Configuration
 1) Go to **Settings → Devices & Services → Add Integration** and search for *Plum Ecovent*.  
-2) Enter:
+2) Select connection type:
+   - `Modbus TCP` (supported)
+   - `Modbus RTU` (currently unavailable in this release)
+3) For `Modbus TCP`, enter:
    - Host/IP of the Modbus TCP endpoint (typically your RTU-to-TCP gateway)
    - Port (default `502`)
    - Unit ID (default `1`)
-   - Update rate in seconds (default `30`)
-3) A device is created with entities for sensors, binary sensors, switches, and numbers from `registers.py`.
+4) After verification and probing, a device is created with entities only for discovered supported registers.
 
 ### Options / Tuning
-- `update_rate`: coordinator polling interval (seconds). Set higher to reduce bus load; lower for faster updates.  
-- Edit `custom_components/plum_ecovent/registers.py` to add/remove registers or adjust metadata (units, categories, skip intervals, filters).
+- `update_rate`: coordinator polling interval (seconds). Set higher to reduce bus load; lower for faster updates.
+- `unit`: unit/slave ID can be tuned post-setup.
+- optional entities: enable/disable discovered entities for your installation.
 
 ## Usage
 - Entities expose live values (e.g., CO2, temperatures, fan speeds) and controls (boost/auto, heater bits, numeric setpoints).  
@@ -53,6 +57,7 @@ action:
 ```
 
 If multiple Plum entries are loaded, include `entry_id` in the service data.
+Available `setting` keys are defined in `custom_components/plum_ecovent/services.yaml`.
 
 ## Requirements
 - Home Assistant Core / OS / Supervised with network access to the Ecovent.  
@@ -61,7 +66,8 @@ If multiple Plum entries are loaded, include `entry_id` in the service data.
 
 ## Troubleshooting
 - Duplicate unique_id warnings: reload the integration after updates so new IDs are applied.  
-- Connection errors: verify IP/port, unit ID, and firewall; increase `update_rate` if the bus is saturated.  
+- Connection errors: verify IP/port, unit ID, and firewall; increase `update_rate` if the bus is saturated.
+- Adapter reachable but setup fails with no response: verify RS485 wiring, gateway serial parameters, and selected unit address.
 - Signature/type errors: integration already falls back across pymodbus signatures; update to latest release if you still see them.
 - Unique ID migration (post-update): if entities remain ignored due to old IDs, remove the Plum Ecovent integration and re-add it, or delete the affected entries from **Settings → Devices & Services → Entities** (show disabled/hidden), then reload. The integration now appends an index to unique IDs to avoid collisions.
 
@@ -75,11 +81,8 @@ If multiple Plum entries are loaded, include `entry_id` in the service data.
 - You are responsible for safe installation, wiring, configuration, and operation of your ventilation system and any connected adapters/gateways.
 - This integration is provided as-is, and the authors/maintainers accept no liability for any damage, data loss, malfunction, or other consequences resulting from installation or use.
 
-## Contributing
-PRs are welcome. Please include test results (`pytest -q`) and note any register additions or breaking changes.
-
-## Documentation
-- HVAC naming standard for future entity/control normalization: [docs/hvac_naming_conventions.md](docs/hvac_naming_conventions.md)
+## User Documentation
 - Supported and field-tested devices: [docs/supported_tested_devices.md](docs/supported_tested_devices.md)
-- Hardware connection guide (vendor-first, model pages can be added later): [docs/hardware_connection_guide.md](docs/hardware_connection_guide.md)
+- Hardware connection guide: [docs/hardware_connection_guide.md](docs/hardware_connection_guide.md)
+- Developer/protocol references are indexed in `docs/dev/README.md`
 
